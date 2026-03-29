@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Shout",
+    "slug": "shout",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "shout",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F5C000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.shout.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F5C000"
+      },
+      "package": "com.shout.app"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
