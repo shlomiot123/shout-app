@@ -9,16 +9,44 @@ const ANGER_OPTIONS = [
   { level: 5, icon: '🔥', label: 'נפצץ' },
 ];
 
+const CHURN_OPTIONS = [
+  'כן, מיידית',
+  'בהתלבטות',
+  'לא ניתן - מונופול',
+  'לא רלוונטי',
+];
+
+const PROFANITY_WORDS = ['כסיל', 'מטומטם', 'אידיוט', 'חרא', 'זין', 'כאס', 'בן זונה', 'שרמוטה'];
+
+function hasProfanity(text) {
+  const lower = text.toLowerCase();
+  return PROFANITY_WORDS.some(w => lower.includes(w));
+}
+
+function sanitize(text) {
+  let out = text;
+  PROFANITY_WORDS.forEach(w => {
+    out = out.replace(new RegExp(w, 'gi'), '***');
+  });
+  return out;
+}
+
 export default function CreateShout({ onClose, onCreated }) {
-  const [step, setStep] = useState(1); // 1: write, 2: category, 3: company, 4: confirm
+  const [step, setStep] = useState(1); // 1..5
   const [content, setContent] = useState('');
   const [angerLevel, setAngerLevel] = useState(3);
   const [selectedCat, setSelectedCat] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [churnChoice, setChurnChoice] = useState(null);
+  const [location, setLocation] = useState('');
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companySearch, setCompanySearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showProfanityWarning, setShowProfanityWarning] = useState(false);
+  const [sanitizedContent, setSanitizedContent] = useState('');
+
+  const TOTAL_STEPS = 5;
 
   useEffect(() => {
     API.get('/api/categories').then(d => setCategories(d.filter(c => c.slug !== 'all')));
@@ -28,6 +56,22 @@ export default function CreateShout({ onClose, onCreated }) {
   const filteredCompanies = companies.filter(c =>
     c.name.includes(companySearch) || c.category_name?.includes(companySearch)
   );
+
+  function handleNextFromStep1() {
+    if (hasProfanity(content)) {
+      const clean = sanitize(content);
+      setSanitizedContent(clean);
+      setShowProfanityWarning(true);
+    } else {
+      setStep(2);
+    }
+  }
+
+  function acceptSanitized() {
+    setContent(sanitizedContent);
+    setShowProfanityWarning(false);
+    setStep(2);
+  }
 
   async function handleSubmit() {
     if (!content.trim() || submitting) return;
@@ -44,8 +88,6 @@ export default function CreateShout({ onClose, onCreated }) {
       setSubmitting(false);
     }
   }
-
-  const steps = [1, 2, 3];
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -77,7 +119,7 @@ export default function CreateShout({ onClose, onCreated }) {
         <div className="modal-body">
           {/* Step indicator */}
           <div className="modal-step-indicator">
-            {steps.map(s => (
+            {[1,2,3,4,5].map(s => (
               <div
                 key={s}
                 className={`step-dot${step === s ? ' active' : step > s ? ' done' : ''}`}
@@ -85,10 +127,24 @@ export default function CreateShout({ onClose, onCreated }) {
             ))}
           </div>
 
+          {/* Profanity warning overlay */}
+          {showProfanityWarning && (
+            <div className="profanity-warning">
+              <div className="profanity-warning-icon">⚠️</div>
+              <div className="profanity-warning-title">מותר לכעוס! אסור לקלל</div>
+              <div className="profanity-warning-sub">זה הנוסח המתוקן לצעקה שלך, נא אשר:</div>
+              <div className="profanity-warning-text">{sanitizedContent}</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="btn-secondary" onClick={() => setShowProfanityWarning(false)}>ערוך</button>
+                <button className="btn-primary yellow" onClick={acceptSanitized}>אשר ✓</button>
+              </div>
+            </div>
+          )}
+
           {/* Step 1: Write */}
-          {step === 1 && (
+          {step === 1 && !showProfanityWarning && (
             <>
-              <div className="modal-section-label">פרט מה קרה:</div>
+              <div className="modal-section-label">ספר לנו על החוויה שלך - בלי קללות ושפה בוטה. מותר לכעוס!</div>
               <textarea
                 className="modal-textarea"
                 rows={5}
@@ -102,21 +158,7 @@ export default function CreateShout({ onClose, onCreated }) {
                 {content.length}/800
               </div>
 
-              <div className="modal-section-label" style={{ marginBottom: 10 }}>רמת הכעס שלך:</div>
-              <div className="anger-selector">
-                {ANGER_OPTIONS.map(a => (
-                  <div
-                    key={a.level}
-                    className={`anger-option${angerLevel === a.level ? ' selected' : ''}`}
-                    onClick={() => setAngerLevel(a.level)}
-                  >
-                    {a.icon}
-                    <span>{a.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <div style={{
                   flex: 1, border: '1.5px dashed var(--gray-300)', borderRadius: 10,
                   padding: '10px', display: 'flex', alignItems: 'center', gap: 8,
@@ -129,7 +171,14 @@ export default function CreateShout({ onClose, onCreated }) {
                   padding: '10px', display: 'flex', alignItems: 'center', gap: 8,
                   cursor: 'pointer', color: 'var(--gray-500)', fontSize: 13,
                 }}>
-                  <span>📍</span> מיקום
+                  <span>📍</span>
+                  <input
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'Heebo', width: '100%', direction: 'rtl' }}
+                    placeholder="מיקום (אופציונלי)"
+                    value={location}
+                    onChange={e => setLocation(e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                  />
                 </div>
               </div>
 
@@ -138,7 +187,7 @@ export default function CreateShout({ onClose, onCreated }) {
                 <button
                   className="btn-primary"
                   disabled={content.trim().length < 10}
-                  onClick={() => setStep(2)}
+                  onClick={handleNextFromStep1}
                 >
                   המשך →
                 </button>
@@ -151,16 +200,19 @@ export default function CreateShout({ onClose, onCreated }) {
             <>
               <div className="modal-section-label">באיזה תחום מדובר?</div>
               <div className="cat-grid">
-                {categories.map(c => (
-                  <div
-                    key={c.id}
-                    className={`cat-option${selectedCat?.id === c.id ? ' selected' : ''}`}
-                    onClick={() => setSelectedCat(c)}
-                  >
-                    <span style={{ fontSize: 20 }}>{c.icon}</span>
-                    {c.name}
-                  </div>
-                ))}
+                {categories.map(c => {
+                  const icon = c.slug === 'health' ? '🩺' : c.icon;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`cat-option${selectedCat?.id === c.id ? ' selected' : ''}`}
+                      onClick={() => setSelectedCat(c)}
+                    >
+                      <span style={{ fontSize: 20 }}>{icon}</span>
+                      {c.name}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="modal-actions">
@@ -199,27 +251,68 @@ export default function CreateShout({ onClose, onCreated }) {
                 ))}
               </div>
 
-              {/* Last question: intent */}
-              {selectedCompany && (
-                <div style={{ marginTop: 16 }}>
-                  <div className="modal-section-label">שאלה אחרונה:</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-600)', marginBottom: 10 }}>
-                    בעקבות המקרה, האם בכוונתך לעזוב את {selectedCompany.name}?
-                  </div>
-                  {['כן, מחפש/ת חלופה מיידית','טרם החלטתי','לא רלוונטי / מונופול'].map(opt => (
-                    <div key={opt} style={{
-                      padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--gray-200)',
-                      marginBottom: 8, cursor: 'pointer', fontSize: 14,
-                      transition: 'all 0.15s ease', textAlign: 'right',
-                    }}>
-                      {opt}
-                    </div>
-                  ))}
-                </div>
-              )}
-
               <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setStep(2)}>חזור</button>
+                <button
+                  className="btn-primary"
+                  onClick={() => setStep(4)}
+                >
+                  המשך →
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 4: Anger level */}
+          {step === 4 && (
+            <>
+              <div className="modal-section-label">מה רמת הכעס שלך?</div>
+              <div className="anger-selector">
+                {ANGER_OPTIONS.map(a => (
+                  <div
+                    key={a.level}
+                    className={`anger-option${angerLevel === a.level ? ' selected' : ''}`}
+                    onClick={() => setAngerLevel(a.level)}
+                  >
+                    {a.icon}
+                    <span>{a.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setStep(3)}>חזור</button>
+                <button
+                  className="btn-primary"
+                  onClick={() => setStep(5)}
+                >
+                  המשך →
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Step 5: Churn question + Submit */}
+          {step === 5 && (
+            <>
+              <div className="modal-section-label">שאלה אחרונה:</div>
+              <div style={{ fontSize: 14, color: 'var(--gray-700)', marginBottom: 14, fontWeight: 600 }}>
+                בעקבות המקרה, האם בכוונתך לעזוב את {selectedCompany?.name || 'החברה'}?
+              </div>
+              <div className="churn-options">
+                {CHURN_OPTIONS.map(opt => (
+                  <div
+                    key={opt}
+                    className={`churn-option${churnChoice === opt ? ' selected' : ''}`}
+                    onClick={() => setChurnChoice(opt)}
+                  >
+                    {opt}
+                  </div>
+                ))}
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setStep(4)}>חזור</button>
                 <button
                   className="btn-primary yellow"
                   disabled={submitting}

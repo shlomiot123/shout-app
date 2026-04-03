@@ -19,7 +19,13 @@ function SkeletonCard() {
   );
 }
 
-export default function Feed({ onCreateShout }) {
+const ALERT_ITEMS = [
+  { text: 'תלונות נגד שופרסל עלו ב-340% בשעה האחרונה.' },
+  { text: 'גל תלונות חדש על הוט – 200+ צעקות ב-2 שעות.' },
+  { text: 'כיכר הצרכנים: עלייה בתלונות על בנק לאומי.' },
+];
+
+export default function Feed({ onCreateShout, onNav }) {
   const [shouts, setShouts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('all');
@@ -55,35 +61,48 @@ export default function Feed({ onCreateShout }) {
         <button
           className={`feed-toggle-btn${feedMode === 'mine' ? ' active' : ''}`}
           onClick={() => setFeedMode('mine')}
-        >מותאם לי ⓘ</button>
+        >מעניין אותי ⓘ</button>
       </div>
 
       {/* Category filter */}
       <div className="category-strip">
-        {categories.map(c => (
-          <button
-            key={c.slug}
-            className={`cat-pill${selectedCat === c.slug ? ' active' : ''}`}
-            onClick={() => setSelectedCat(c.slug)}
-          >
-            {c.icon} {c.name}
-          </button>
-        ))}
+        {categories.map(c => {
+          // Override health icon to stethoscope
+          const icon = c.slug === 'health' ? '🩺' : c.icon;
+          return (
+            <button
+              key={c.slug}
+              className={`cat-pill${selectedCat === c.slug ? ' active' : ''}`}
+              onClick={() => setSelectedCat(c.slug)}
+            >
+              {icon} {c.name}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Alert banner */}
-      <div className="alert-banner">
-        <div className="alert-banner-icon">🚨</div>
-        <div className="alert-banner-text">
-          <div className="alert-banner-title">מבזק אדום עכשיו!</div>
-          תלונות נגד שופרסל עלו ב-340% בשעה האחרונה.
+      {/* Alert banner — red flash, up to 3 items */}
+      <div className="alert-banner-multi">
+        <div className="alert-banner-header">
+          <span className="alert-banner-icon">🚨</span>
+          <span className="alert-banner-title">מבזק אדום!</span>
         </div>
-        <button className="alert-banner-action">כן, הלחץ יעבוד</button>
+        {ALERT_ITEMS.map((item, i) => (
+          <div key={i} className="alert-banner-row">
+            <span className="alert-banner-row-text">{item.text}</span>
+            <button
+              className="alert-banner-action"
+              onClick={() => onNav && onNav('companies')}
+            >
+              הראו לי ›
+            </button>
+          </div>
+        ))}
       </div>
 
       {/* Compose */}
       <div className="compose-box" onClick={onCreateShout}>
-        <div className="compose-placeholder">על מה נכעס היום, אנונימי?</div>
+        <div className="compose-placeholder">מה הכעיס אותך היום? (פרסום אנונימי)</div>
         <button className="compose-img-btn">🖼</button>
         <div className="compose-avatar">👤</div>
       </div>
@@ -101,7 +120,7 @@ export default function Feed({ onCreateShout }) {
         </div>
       ) : (
         shouts.map(shout => (
-          <ShoutCard key={shout.id} shout={shout} />
+          <ShoutCard key={shout.id} shout={shout} onNav={onNav} />
         ))
       )}
     </>

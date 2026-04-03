@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { API } from '../App.jsx';
 
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4','#84CC16'];
@@ -19,14 +19,41 @@ function Flames({ level }) {
   );
 }
 
-export default function ShoutCard({ shout: initial, onCreateSquad }) {
+const BOOST_OPTIONS = [
+  { level: 1, icon: '😐', label: 'מרוגז' },
+  { level: 2, icon: '😤', label: 'זועם' },
+  { level: 3, icon: '😠', label: 'כועס' },
+  { level: 4, icon: '🤬', label: 'רותח' },
+  { level: 5, icon: '🔥', label: 'נפצץ' },
+];
+
+// Company badge colors map
+const COMPANY_COLORS = {
+  'הוט': '#EF4444',
+  'פרטנר': '#F97316',
+  'סלקום': '#3B82F6',
+  'בזק': '#8B5CF6',
+  'שופרסל': '#10B981',
+  'רמי לוי': '#06B6D4',
+};
+
+function getCompanyColor(name) {
+  return COMPANY_COLORS[name] || '#6B7280';
+}
+
+export default function ShoutCard({ shout: initial, onCreateSquad, onNav }) {
   const [shout, setShout] = useState(initial);
   const [showReply, setShowReply] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showBoostPicker, setShowBoostPicker] = useState(false);
+  const [showSquadMenu, setShowSquadMenu] = useState(false);
+  const [echoAnim, setEchoAnim] = useState(false);
 
   async function handleEcho() {
     const res = await API.post(`/api/shouts/${shout.id}/echo`);
+    setEchoAnim(true);
+    setTimeout(() => setEchoAnim(false), 400);
     setShout(s => ({
       ...s,
       echoed: res.echoed,
@@ -34,7 +61,8 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
     }));
   }
 
-  async function handleBoost() {
+  async function handleBoostLevel(level) {
+    setShowBoostPicker(false);
     const res = await API.post(`/api/shouts/${shout.id}/boost`);
     setShout(s => ({
       ...s,
@@ -50,7 +78,6 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
     setReplyText('');
     setShowReply(false);
     setSubmitting(false);
-    // optimistically add response
     setShout(s => ({
       ...s,
       responses: [...(s.responses || []), {
@@ -63,11 +90,20 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
     }));
   }
 
+  function handleShare() {
+    if (navigator.share) {
+      navigator.share({ title: 'Shout', text: shout.content, url: window.location.href });
+    } else {
+      navigator.clipboard?.writeText(shout.content);
+    }
+  }
+
   const avatarColor = getColor(shout.username || '');
   const initials = (shout.username || '?').charAt(0);
   const officialResponse = shout.responses?.find(r => r.is_official);
   const userResponses = shout.responses?.filter(r => !r.is_official) || [];
   const totalResponses = (shout.responses || []).length;
+  const companyColor = getCompanyColor(shout.company_name || '');
 
   return (
     <div className={`shout-card${shout.is_resolved ? ' resolved' : ''}`}>
@@ -83,8 +119,16 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
               {shout.company_name && (
                 <>
                   <span style={{ color: 'var(--gray-300)' }}>›</span>
-                  <span className="shout-company-link">{shout.company_name}</span>
+                  <span
+                    className="shout-company-badge"
+                    style={{ background: companyColor }}
+                  >
+                    {shout.company_name}
+                  </span>
                 </>
+              )}
+              {shout.is_resolved && (
+                <span className="shout-resolved-badge">✅ נפתר</span>
               )}
             </div>
             <div className="shout-time">
@@ -94,7 +138,8 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
             </div>
           </div>
         </div>
-        <button className="shout-more-btn">⋯</button>
+        {/* Share button top-right */}
+        <button className="shout-share-btn" onClick={handleShare} aria-label="שתף">📤</button>
       </div>
 
       {/* Content */}
@@ -187,10 +232,44 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
         </div>
       )}
 
-      {/* Actions */}
+      {/* Boost picker popup */}
+      {showBoostPicker && (
+        <div className="boost-picker">
+          <div className="boost-picker-title">בחר רמת כעס לבוסט</div>
+          <div className="boost-picker-options">
+            {BOOST_OPTIONS.map(o => (
+              <button
+                key={o.level}
+                className="boost-picker-option"
+                onClick={() => handleBoostLevel(o.level)}
+              >
+                <span style={{ fontSize: 22 }}>{o.icon}</span>
+                <span style={{ fontSize: 10 }}>{o.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Squad menu popup */}
+      {showSquadMenu && (
+        <div className="squad-dropdown">
+          <button className="squad-dropdown-item" onClick={() => { setShowSquadMenu(false); onNav && onNav('squads'); }}>
+            👁 לראות
+          </button>
+          <button className="squad-dropdown-item" onClick={() => { setShowSquadMenu(false); onNav && onNav('squads'); }}>
+            ➕ להצטרף
+          </button>
+          <button className="squad-dropdown-item" onClick={() => { setShowSquadMenu(false); onCreateSquad && onCreateSquad(shout); }}>
+            ⚡ ליצור
+          </button>
+        </div>
+      )}
+
+      {/* Actions: קרה גם לי | בוסט 🔥 | תגובה | קבוצת השפעה */}
       <div className="shout-actions">
         <button
-          className={`action-btn${shout.echoed ? ' echoed' : ''}`}
+          className={`action-btn${shout.echoed ? ' echoed' : ''}${echoAnim ? ' echo-anim' : ''}`}
           onClick={handleEcho}
         >
           <span className="action-icon">{shout.echoed ? '🤝' : '🤜'}</span>
@@ -198,9 +277,9 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
         </button>
         <button
           className={`action-btn${shout.boosted ? ' boosted' : ''}`}
-          onClick={handleBoost}
+          onClick={() => setShowBoostPicker(p => !p)}
         >
-          <span className="action-icon">📈</span>
+          <span className="action-icon">🔥</span>
           {shout.boosts > 0 ? `בוסט (${shout.boosts})` : 'בוסט'}
         </button>
         <button
@@ -212,10 +291,10 @@ export default function ShoutCard({ shout: initial, onCreateSquad }) {
         </button>
         <button
           className="action-btn"
-          onClick={() => onCreateSquad && onCreateSquad(shout)}
+          onClick={() => setShowSquadMenu(m => !m)}
         >
           <span className="action-icon">⚡</span>
-          קבוצת לחץ
+          קבוצת השפעה
         </button>
       </div>
     </div>

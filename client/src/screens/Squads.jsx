@@ -100,19 +100,20 @@ function SquadCard({ squad: initial }) {
   );
 }
 
-export default function Squads() {
+export default function Squads({ onCreateShout }) {
   const [squads, setSquads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('active'); // active | success | mine
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     API.get('/api/squads').then(d => { setSquads(d); setLoading(false); });
   }, []);
 
-  const shown = squads.filter(s => {
-    if (tab === 'success') return s.is_success;
-    if (tab === 'mine') return s.joined;
-    return !s.is_success;
+  const filtered = squads.filter(s => {
+    const matchTab = tab === 'success' ? s.is_success : tab === 'mine' ? s.joined : !s.is_success;
+    const matchSearch = !search || s.name.includes(search) || s.company_name?.includes(search);
+    return matchTab && matchSearch;
   });
 
   return (
@@ -130,17 +131,26 @@ export default function Squads() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'var(--gray-100)', borderRadius: 10, padding: '8px 12px',
-          marginBottom: 12,
+          marginBottom: 12, border: '1.5px solid var(--gray-200)',
         }}>
           <span style={{ fontSize: 16 }}>🔍</span>
-          <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>חפש קבוצת לחץ...</span>
+          <input
+            style={{
+              border: 'none', outline: 'none', background: 'transparent',
+              fontSize: 13, fontFamily: 'Heebo', flex: 1,
+              direction: 'rtl', color: 'var(--dark)',
+            }}
+            placeholder="חפש קבוצת לחץ..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 4, paddingBottom: 0 }}>
           {[
             { key: 'active', label: 'פעילות' },
-            { key: 'success', label: '✅ נצחונות' },
+            { key: 'success', label: 'נצחונות ✅' },
             { key: 'mine', label: 'שלי' },
           ].map(t => (
             <button
@@ -160,15 +170,24 @@ export default function Squads() {
 
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-500)' }}>טוען...</div>
-      ) : shown.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">⚡</div>
           <div className="empty-state-title">אין קבוצות כאן</div>
           <div className="empty-state-sub">לחץ על 📣 כדי ליצור קבוצת לחץ חדשה</div>
         </div>
       ) : (
-        shown.map(s => <SquadCard key={s.id} squad={s} />)
+        filtered.map(s => <SquadCard key={s.id} squad={s} />)
       )}
+
+      {/* FAB - yellow circle with megaphone */}
+      <button
+        className="squads-fab"
+        onClick={onCreateShout}
+        aria-label="צור קבוצת לחץ"
+      >
+        📣
+      </button>
     </>
   );
 }

@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { API } from '../App.jsx';
 
 const CAT_ICONS = {
-  banks: '🏦', insurance: '🛡️', health: '❤️', telecom: '📱',
+  banks: '🏦', insurance: '🛡️', health: '🩺', telecom: '📱',
   food: '🛒', transport: '🚌', aviation: '✈️', 'car-rental': '🚗', all: '🏢',
 };
+
+// Companies that "joined Shout"
+const JOINED_SHOUT = ['שופרסל', 'רמי לוי', 'פרטנר'];
 
 export default function Companies({ onCreateShout }) {
   const [companies, setCompanies] = useState([]);
@@ -12,6 +15,7 @@ export default function Companies({ onCreateShout }) {
   const [selectedCat, setSelectedCat] = useState('all');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     API.get('/api/categories').then(setCategories);
@@ -29,12 +33,36 @@ export default function Companies({ onCreateShout }) {
     return 'low';
   }
 
+  const filtered = companies.filter(c =>
+    !search || c.name.includes(search) || c.category_name?.includes(search)
+  );
+
+  // Monthly shouts estimate (~30% of total)
+  function monthlyShouts(total) {
+    return Math.round(total * 0.3);
+  }
+
   return (
     <>
-      <div className="companies-header">חברות ותאגידים</div>
-      <div className="companies-sub">
-        חברות שכל נושא תפקיד בסופר ברנד הוא גם צרכן שלהן.
-        בחר חברה לפתיחת תלונה, לצפייה בניילון הצעקות שלה.
+      {/* Search */}
+      <div style={{ background: 'var(--white)', padding: '12px', borderBottom: '1px solid var(--gray-200)' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--gray-100)', borderRadius: 10, padding: '8px 12px',
+          border: '1.5px solid var(--gray-200)',
+        }}>
+          <span style={{ fontSize: 16 }}>🔍</span>
+          <input
+            style={{
+              border: 'none', outline: 'none', background: 'transparent',
+              fontSize: 13, fontFamily: 'Heebo', flex: 1,
+              direction: 'rtl', color: 'var(--dark)',
+            }}
+            placeholder="חפש חברה..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Category filter */}
@@ -45,7 +73,7 @@ export default function Companies({ onCreateShout }) {
             className={`cat-pill${selectedCat === c.slug ? ' active' : ''}`}
             onClick={() => setSelectedCat(c.slug)}
           >
-            {c.icon} {c.name}
+            {c.slug === 'health' ? '🩺' : c.icon} {c.name}
           </button>
         ))}
       </div>
@@ -53,9 +81,11 @@ export default function Companies({ onCreateShout }) {
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-500)' }}>טוען...</div>
       ) : (
-        companies.map(co => {
-          const icon = CAT_ICONS[co.category_name?.toLowerCase().replace(/[^a-z]/g,'')] || co.category_icon || '🏢';
+        filtered.map(co => {
+          const icon = CAT_ICONS[co.category_name?.toLowerCase().replace(/[^a-z-]/g,'')] || co.category_icon || '🏢';
           const isExpanded = expandedId === co.id;
+          const hasJoined = JOINED_SHOUT.includes(co.name);
+          const monthly = monthlyShouts(co.total_shouts);
 
           return (
             <div key={co.id}>
@@ -68,19 +98,25 @@ export default function Companies({ onCreateShout }) {
                 </div>
 
                 <div className="company-row-info">
-                  <div className="company-row-name">{co.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="company-row-name">{co.name}</div>
+                    {hasJoined && (
+                      <span className="company-joined-badge">👂 הצטרפנו כדי להקשיב לכם</span>
+                    )}
+                  </div>
                   <div className="company-row-meta">
-                    {co.category_name} · {co.total_shouts.toLocaleString('he-IL')} צעקות
+                    {co.category_name} · 📣 {co.total_shouts.toLocaleString('he-IL')} צעקות
+                    {' · '}
+                    <span style={{ color: 'var(--orange)', fontWeight: 600 }}>
+                      {monthly.toLocaleString('he-IL')} מהחודש האחרון
+                    </span>
                   </div>
                 </div>
 
                 <div className="company-row-anger">
-                  <span className={`anger-chip ${getAngerClass(co.anger_score)}`}>
-                    זעם {co.anger_score}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
-                    {co.response_rate}% תגובות
-                  </span>
+                  <span className="company-anger-icon">🔥 {co.anger_score}</span>
+                  <span className="company-trophy-icon">🏆 {co.resolved_shouts}</span>
+                  <span className="company-mega-icon">📣 {co.total_shouts}</span>
                 </div>
 
                 <span style={{ color: 'var(--gray-400)', fontSize: 14 }}>
@@ -115,7 +151,7 @@ export default function Companies({ onCreateShout }) {
                     ))}
                   </div>
 
-                  {/* Buttons */}
+                  {/* Two buttons */}
                   <button
                     className="btn-primary yellow"
                     style={{ width: '100%', marginBottom: 8 }}
@@ -124,12 +160,11 @@ export default function Companies({ onCreateShout }) {
                     📣 פתח תלונה נגד {co.name}
                   </button>
 
-                  <button style={{
-                    width: '100%', padding: '11px', borderRadius: 10,
-                    border: '1.5px solid var(--gray-200)', background: 'none',
-                    fontFamily: 'Heebo', fontSize: 14, fontWeight: 600,
-                    cursor: 'pointer', color: 'var(--dark)',
-                  }}>
+                  <button
+                    className="btn-ghost"
+                    style={{ width: '100%' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     👁 צפה בכל הצעקות נגד {co.name}
                   </button>
                 </div>

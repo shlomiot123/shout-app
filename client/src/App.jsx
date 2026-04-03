@@ -75,7 +75,7 @@ export default function App() {
 
       <div className="screen-content">
         {screen === 'landing'      && <Landing onEnter={() => navigate('feed')} />}
-        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} />}
+        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} onNav={navigate} />}
         {screen === 'squads'       && <Squads onCreateShout={() => setShowCreate(true)} />}
         {screen === 'leaderboard'  && <Leaderboard onCompanies={() => navigate('companies')} />}
         {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} />}

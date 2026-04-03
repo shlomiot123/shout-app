@@ -9,7 +9,8 @@ export default function Header({ screen, onNav, onHamburger, onSearch, unreadCou
   return (
     <header className="header">
       <div className="header-top">
-        <div className="header-icons" style={{ direction: 'rtl' }}>
+        {/* Left side: hamburger, bell, search (RTL: hamburger is leftmost) */}
+        <div className="header-icons">
           <button className="icon-btn" onClick={onHamburger} aria-label="תפריט">
             ☰
           </button>
@@ -21,6 +22,7 @@ export default function Header({ screen, onNav, onHamburger, onSearch, unreadCou
             🔍
           </button>
         </div>
+        {/* Logo on RIGHT side */}
         <span className="header-logo">Shout</span>
       </div>
 
