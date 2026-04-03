@@ -25,7 +25,7 @@ const ALERT_ITEMS = [
   { text: 'כיכר הצרכנים: עלייה בתלונות על בנק לאומי.' },
 ];
 
-export default function Feed({ onCreateShout, onNav }) {
+export default function Feed({ onCreateShout, onNav, onOpenCreateSquad }) {
   const [shouts, setShouts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('all');
@@ -120,7 +120,7 @@ export default function Feed({ onCreateShout, onNav }) {
         </div>
       ) : (
         shouts.map(shout => (
-          <ShoutCard key={shout.id} shout={shout} onNav={onNav} />
+          <ShoutCard key={shout.id} shout={shout} onNav={onNav} onOpenCreateSquad={onOpenCreateSquad} />
         ))
       )}
     </>

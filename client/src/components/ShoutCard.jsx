@@ -41,7 +41,7 @@ function getCompanyColor(name) {
   return COMPANY_COLORS[name] || '#6B7280';
 }
 
-export default function ShoutCard({ shout: initial, onCreateSquad, onNav }) {
+export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpenCreateSquad }) {
   const [shout, setShout] = useState(initial);
   const [showReply, setShowReply] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -260,7 +260,11 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav }) {
           <button className="squad-dropdown-item" onClick={() => { setShowSquadMenu(false); onNav && onNav('squads'); }}>
             ➕ להצטרף
           </button>
-          <button className="squad-dropdown-item" onClick={() => { setShowSquadMenu(false); onCreateSquad && onCreateSquad(shout); }}>
+          <button className="squad-dropdown-item" onClick={() => {
+            setShowSquadMenu(false);
+            if (onOpenCreateSquad) onOpenCreateSquad(shout);
+            else onCreateSquad && onCreateSquad(shout);
+          }}>
             ⚡ ליצור
           </button>
         </div>

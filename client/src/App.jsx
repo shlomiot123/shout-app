@@ -3,12 +3,16 @@ import Header from './components/Header.jsx';
 import BottomNav from './components/BottomNav.jsx';
 import HamburgerMenu from './components/HamburgerMenu.jsx';
 import CreateShout from './components/CreateShout.jsx';
+import CreateSquad from './components/CreateSquad.jsx';
 import Landing from './screens/Landing.jsx';
+import Onboarding from './screens/Onboarding.jsx';
 import Feed from './screens/Feed.jsx';
 import Squads from './screens/Squads.jsx';
 import Leaderboard from './screens/Leaderboard.jsx';
 import Companies from './screens/Companies.jsx';
 import Notifications from './screens/Notifications.jsx';
+import CorporatePortal from './screens/CorporatePortal.jsx';
+import Profile from './screens/Profile.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
 
 // Persistent session id
@@ -28,12 +32,17 @@ export const API = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState('landing'); // landing | feed | squads | leaderboard | companies | notifications
+  const onboarded = !!localStorage.getItem('shout_onboarded');
+
+  // landing | onboarding | corporate | feed | squads | leaderboard | companies | notifications | profile
+  const [screen, setScreen] = useState(onboarded ? 'landing' : 'onboarding');
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreateSquad, setShowCreateSquad] = useState(false);
+  const [createSquadShout, setCreateSquadShout] = useState(null);
   const [showHamburger, setShowHamburger] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [feedKey, setFeedKey] = useState(0); // bump to refresh feed
+  const [feedKey, setFeedKey] = useState(0);
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -59,7 +68,43 @@ export default function App() {
     navigate('feed');
   }
 
-  const isApp = screen !== 'landing';
+  function onSquadCreated() {
+    setShowCreateSquad(false);
+    setCreateSquadShout(null);
+    navigate('squads');
+  }
+
+  function openCreateSquad(shout) {
+    setCreateSquadShout(shout || null);
+    setShowCreateSquad(true);
+  }
+
+  const isApp = !['landing', 'onboarding', 'corporate', 'profile'].includes(screen);
+
+  // Full-screen non-nav screens
+  if (screen === 'onboarding') {
+    return (
+      <div className="app-shell">
+        <Onboarding onDone={() => navigate('landing')} />
+      </div>
+    );
+  }
+
+  if (screen === 'corporate') {
+    return (
+      <div className="app-shell">
+        <CorporatePortal onBack={() => navigate('landing')} />
+      </div>
+    );
+  }
+
+  if (screen === 'profile') {
+    return (
+      <div className="app-shell" style={{ overflowY: 'auto' }}>
+        <Profile onClose={() => navigate('feed')} onNav={navigate} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -74,9 +119,9 @@ export default function App() {
       )}
 
       <div className="screen-content">
-        {screen === 'landing'      && <Landing onEnter={() => navigate('feed')} />}
-        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} onNav={navigate} />}
-        {screen === 'squads'       && <Squads onCreateShout={() => setShowCreate(true)} />}
+        {screen === 'landing'      && <Landing onEnter={() => navigate('feed')} onCorporate={() => navigate('corporate')} />}
+        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} onNav={navigate} onOpenCreateSquad={openCreateSquad} />}
+        {screen === 'squads'       && <Squads onCreateShout={() => setShowCreate(true)} onCreateSquad={openCreateSquad} />}
         {screen === 'leaderboard'  && <Leaderboard onCompanies={() => navigate('companies')} />}
         {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} />}
         {screen === 'notifications' && <Notifications />}
@@ -103,6 +148,14 @@ export default function App() {
         <CreateShout
           onClose={() => setShowCreate(false)}
           onCreated={onShoutCreated}
+        />
+      )}
+
+      {showCreateSquad && (
+        <CreateSquad
+          initialShout={createSquadShout}
+          onClose={() => { setShowCreateSquad(false); setCreateSquadShout(null); }}
+          onCreated={onSquadCreated}
         />
       )}
 

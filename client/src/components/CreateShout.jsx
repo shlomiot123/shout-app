@@ -16,6 +16,14 @@ const CHURN_OPTIONS = [
   'לא רלוונטי',
 ];
 
+const INFLUENCE_OPTIONS = [
+  { key: 'personal', icon: '👤', label: 'אישי', sub: 'קרה לי לבד' },
+  { key: 'family', icon: '👨‍👩‍👧', label: 'משפחתי', sub: 'קרה לבני ביתי' },
+  { key: 'neighborhood', icon: '🏘️', label: 'שכונה', sub: 'שמעתי משכנים' },
+  { key: 'city', icon: '🏙️', label: 'עיר', sub: 'כל העיר סובלת' },
+  { key: 'national', icon: '🇮🇱', label: 'ארצי', sub: 'בעיה לאומית' },
+];
+
 const PROFANITY_WORDS = ['כסיל', 'מטומטם', 'אידיוט', 'חרא', 'זין', 'כאס', 'בן זונה', 'שרמוטה'];
 
 function hasProfanity(text) {
@@ -32,8 +40,9 @@ function sanitize(text) {
 }
 
 export default function CreateShout({ onClose, onCreated }) {
-  const [step, setStep] = useState(1); // 1..5
+  const [step, setStep] = useState(1); // 1..6
   const [content, setContent] = useState('');
+  const [influenceCircle, setInfluenceCircle] = useState('personal');
   const [angerLevel, setAngerLevel] = useState(3);
   const [selectedCat, setSelectedCat] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
@@ -46,7 +55,7 @@ export default function CreateShout({ onClose, onCreated }) {
   const [showProfanityWarning, setShowProfanityWarning] = useState(false);
   const [sanitizedContent, setSanitizedContent] = useState('');
 
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6;
 
   useEffect(() => {
     API.get('/api/categories').then(d => setCategories(d.filter(c => c.slug !== 'all')));
@@ -107,9 +116,13 @@ export default function CreateShout({ onClose, onCreated }) {
             width: 38, height: 38, borderRadius: '50%',
             background: '#10B981', display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontSize: 18, color: '#fff', fontWeight: 700,
-          }}>א</div>
+          }}>
+            {(localStorage.getItem('shout_nickname') || 'א').charAt(0)}
+          </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>אנונימי_84</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>
+              {localStorage.getItem('shout_nickname') || 'אנונימי_84'}
+            </div>
             <div style={{ fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 }}>
               🌐 פומבי למתחרים
             </div>
@@ -119,7 +132,7 @@ export default function CreateShout({ onClose, onCreated }) {
         <div className="modal-body">
           {/* Step indicator */}
           <div className="modal-step-indicator">
-            {[1,2,3,4,5].map(s => (
+            {[1, 2, 3, 4, 5, 6].map(s => (
               <div
                 key={s}
                 className={`step-dot${step === s ? ' active' : step > s ? ' done' : ''}`}
@@ -173,7 +186,10 @@ export default function CreateShout({ onClose, onCreated }) {
                 }}>
                   <span>📍</span>
                   <input
-                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'Heebo', width: '100%', direction: 'rtl' }}
+                    style={{
+                      border: 'none', outline: 'none', background: 'transparent',
+                      fontSize: 13, fontFamily: 'Heebo', width: '100%', direction: 'rtl',
+                    }}
                     placeholder="מיקום (אופציונלי)"
                     value={location}
                     onChange={e => setLocation(e.target.value)}
@@ -195,8 +211,37 @@ export default function CreateShout({ onClose, onCreated }) {
             </>
           )}
 
-          {/* Step 2: Category */}
+          {/* Step 2: Influence circle */}
           {step === 2 && (
+            <>
+              <div className="modal-section-label">מה מעגל ההשפעה של הבעיה?</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {INFLUENCE_OPTIONS.map(o => (
+                  <div
+                    key={o.key}
+                    className={`influence-option${influenceCircle === o.key ? ' selected' : ''}`}
+                    onClick={() => setInfluenceCircle(o.key)}
+                  >
+                    <span style={{ fontSize: 22 }}>{o.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{o.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{o.sub}</div>
+                    </div>
+                    {influenceCircle === o.key && (
+                      <span style={{ color: 'var(--green)', fontWeight: 700 }}>✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setStep(1)}>חזור</button>
+                <button className="btn-primary" onClick={() => setStep(3)}>המשך →</button>
+              </div>
+            </>
+          )}
+
+          {/* Step 3: Category */}
+          {step === 3 && (
             <>
               <div className="modal-section-label">באיזה תחום מדובר?</div>
               <div className="cat-grid">
@@ -214,13 +259,12 @@ export default function CreateShout({ onClose, onCreated }) {
                   );
                 })}
               </div>
-
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setStep(1)}>חזור</button>
+                <button className="btn-secondary" onClick={() => setStep(2)}>חזור</button>
                 <button
                   className="btn-primary"
                   disabled={!selectedCat}
-                  onClick={() => setStep(3)}
+                  onClick={() => setStep(4)}
                 >
                   המשך →
                 </button>
@@ -228,8 +272,8 @@ export default function CreateShout({ onClose, onCreated }) {
             </>
           )}
 
-          {/* Step 3: Company */}
-          {step === 3 && (
+          {/* Step 4: Company */}
+          {step === 4 && (
             <>
               <div className="modal-section-label">בחר חברה מהרשימה:</div>
               <input
@@ -250,21 +294,15 @@ export default function CreateShout({ onClose, onCreated }) {
                   </div>
                 ))}
               </div>
-
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setStep(2)}>חזור</button>
-                <button
-                  className="btn-primary"
-                  onClick={() => setStep(4)}
-                >
-                  המשך →
-                </button>
+                <button className="btn-secondary" onClick={() => setStep(3)}>חזור</button>
+                <button className="btn-primary" onClick={() => setStep(5)}>המשך →</button>
               </div>
             </>
           )}
 
-          {/* Step 4: Anger level */}
-          {step === 4 && (
+          {/* Step 5: Anger level */}
+          {step === 5 && (
             <>
               <div className="modal-section-label">מה רמת הכעס שלך?</div>
               <div className="anger-selector">
@@ -279,21 +317,15 @@ export default function CreateShout({ onClose, onCreated }) {
                   </div>
                 ))}
               </div>
-
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setStep(3)}>חזור</button>
-                <button
-                  className="btn-primary"
-                  onClick={() => setStep(5)}
-                >
-                  המשך →
-                </button>
+                <button className="btn-secondary" onClick={() => setStep(4)}>חזור</button>
+                <button className="btn-primary" onClick={() => setStep(6)}>המשך →</button>
               </div>
             </>
           )}
 
-          {/* Step 5: Churn question + Submit */}
-          {step === 5 && (
+          {/* Step 6: Churn question + Submit */}
+          {step === 6 && (
             <>
               <div className="modal-section-label">שאלה אחרונה:</div>
               <div style={{ fontSize: 14, color: 'var(--gray-700)', marginBottom: 14, fontWeight: 600 }}>
@@ -312,7 +344,7 @@ export default function CreateShout({ onClose, onCreated }) {
               </div>
 
               <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setStep(4)}>חזור</button>
+                <button className="btn-secondary" onClick={() => setStep(5)}>חזור</button>
                 <button
                   className="btn-primary yellow"
                   disabled={submitting}

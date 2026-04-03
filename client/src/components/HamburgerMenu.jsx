@@ -92,8 +92,14 @@ export default function HamburgerMenu({ onClose, onNav }) {
               👤
             </div>
             <div>
-              <div className="drawer-username">{username}</div>
-              <div className="drawer-view-profile">צפה בפרופיל שלך</div>
+              <div className="drawer-username">{localStorage.getItem('shout_nickname') || username}</div>
+              <button
+                className="drawer-view-profile"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Heebo', color: 'var(--orange)', textDecoration: 'underline', fontSize: 12 }}
+                onClick={() => onNav('profile')}
+              >
+                צפה בפרופיל שלך →
+              </button>
             </div>
           </div>
           <button className="drawer-close" onClick={onClose}>✕</button>
