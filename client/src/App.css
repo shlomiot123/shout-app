@@ -2677,3 +2677,66 @@ html, body {
   box-shadow: 0 0 0 2px rgba(245,192,0,0.2);
 }
 
+/* ── Landing CTA variants ─────────────────────────────────────────────────── */
+.landing-cta-black {
+  background: var(--black);
+  color: var(--white);
+}
+
+.landing-cta-black:hover { background: #222; }
+
+.landing-cta-corp-blue {
+  width: 100%;
+  padding: 14px;
+  background: #1e3a5f;
+  color: var(--white);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-family: 'Heebo', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.landing-cta-corp-blue:active { transform: scale(0.98); }
+.landing-cta-corp-blue:hover { background: #2a4f80; }
+
+/* ── Flame selector (CreateShout step 5) ─────────────────────────────────── */
+.flame-selector-full {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 0 16px;
+}
+
+.flame-option-full {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 2px solid var(--gray-200);
+  background: var(--white);
+  cursor: pointer;
+  min-width: 56px;
+  transition: all 0.15s;
+}
+
+.flame-option-full:hover { border-color: #F97316; background: #FFF7ED; }
+.flame-option-full.selected { box-shadow: 0 0 0 2px rgba(249,115,22,0.3); }
+
+.flame-row {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-height: 24px;
+}
+

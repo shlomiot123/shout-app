@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { API } from '../App.jsx';
+import { FlameDisplay, FlamePickerRow } from './FlamePicker.jsx';
 
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4','#84CC16'];
 
@@ -8,24 +9,6 @@ function getColor(name) {
   for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
-
-function Flames({ level }) {
-  return (
-    <span className="anger-flames">
-      {[1,2,3,4,5].map(i => (
-        <span key={i} className={`flame${i <= level ? ' active' : ''}`}>🔥</span>
-      ))}
-    </span>
-  );
-}
-
-const BOOST_OPTIONS = [
-  { level: 1, icon: '😐', label: 'מרוגז' },
-  { level: 2, icon: '😤', label: 'זועם' },
-  { level: 3, icon: '😠', label: 'כועס' },
-  { level: 4, icon: '🤬', label: 'רותח' },
-  { level: 5, icon: '🔥', label: 'נפצץ' },
-];
 
 // Company badge colors map
 const COMPANY_COLORS = {
@@ -145,7 +128,7 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
       {/* Content */}
       <div className="shout-content">
         {shout.content}
-        <Flames level={shout.anger_level} />
+        <FlameDisplay level={shout.anger_level} />
       </div>
 
       {/* Proof */}
@@ -234,21 +217,7 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
 
       {/* Boost picker popup */}
       {showBoostPicker && (
-        <div className="boost-picker">
-          <div className="boost-picker-title">בחר רמת כעס לבוסט</div>
-          <div className="boost-picker-options">
-            {BOOST_OPTIONS.map(o => (
-              <button
-                key={o.level}
-                className="boost-picker-option"
-                onClick={() => handleBoostLevel(o.level)}
-              >
-                <span style={{ fontSize: 22 }}>{o.icon}</span>
-                <span style={{ fontSize: 10 }}>{o.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <FlamePickerRow onSelect={handleBoostLevel} />
       )}
 
       {/* Squad menu popup */}

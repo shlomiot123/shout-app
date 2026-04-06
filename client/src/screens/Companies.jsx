@@ -9,13 +9,13 @@ const CAT_ICONS = {
 // Companies that "joined Shout"
 const JOINED_SHOUT = ['שופרסל', 'רמי לוי', 'פרטנר'];
 
-export default function Companies({ onCreateShout }) {
+export default function Companies({ onCreateShout, initialFilter }) {
   const [companies, setCompanies] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('all');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialFilter?.companySearch || '');
 
   useEffect(() => {
     API.get('/api/categories').then(setCategories);
@@ -24,7 +24,15 @@ export default function Companies({ onCreateShout }) {
   useEffect(() => {
     setLoading(true);
     API.get(`/api/companies?category=${selectedCat}`)
-      .then(d => { setCompanies(d); setLoading(false); });
+      .then(d => {
+        setCompanies(d);
+        setLoading(false);
+        // Auto-expand if arriving from alert banner
+        if (initialFilter?.companySearch) {
+          const found = d.find(c => c.name === initialFilter.companySearch);
+          if (found) setExpandedId(found.id);
+        }
+      });
   }, [selectedCat]);
 
   function getAngerClass(score) {

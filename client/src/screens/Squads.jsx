@@ -4,7 +4,7 @@ import { API } from '../App.jsx';
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4'];
 const GOAL_ICONS = { legal: '⚖️', public: '📢', regulatory: '🏛️', investor: '📈' };
 
-function SquadCard({ squad: initial }) {
+function SquadCard({ squad: initial, onCreateSquad }) {
   const [squad, setSquad] = useState(initial);
 
   async function handleJoin() {
@@ -19,6 +19,7 @@ function SquadCard({ squad: initial }) {
 
   const pct = Math.min(100, Math.round((squad.current_members / squad.target_members) * 100));
   const goalIcon = GOAL_ICONS[squad.goal_type] || '⚖️';
+  const recentJoined = Math.floor(Math.random() * 15) + 1; // demo
 
   return (
     <div className={`squad-card${squad.is_success ? ' success' : ''}`}>
@@ -39,6 +40,17 @@ function SquadCard({ squad: initial }) {
           )}
         </div>
 
+        {/* Status badge */}
+        <div style={{
+          display: 'inline-block', padding: '3px 10px',
+          background: pct >= 100 ? 'var(--green-light)' : pct >= 70 ? '#FEF3C7' : 'var(--gray-100)',
+          borderRadius: 20, fontSize: 11, fontWeight: 700,
+          color: pct >= 100 ? 'var(--green)' : pct >= 70 ? '#B45309' : 'var(--gray-600)',
+          marginBottom: 8,
+        }}>
+          {pct >= 100 ? '⚖️ לקראת תביעה' : pct >= 70 ? '🤝 במשא ומתן' : '📋 באיסוף עדויות'}
+        </div>
+
         {squad.goal_description && (
           <div className="squad-goal">
             <span>{goalIcon}</span>
@@ -54,11 +66,16 @@ function SquadCard({ squad: initial }) {
           />
         </div>
         <div className="progress-label">
-          <span>{squad.target_members.toLocaleString('he-IL')} דרושים</span>
+          <span>{squad.current_members.toLocaleString('he-IL')} / {squad.target_members.toLocaleString('he-IL')} חברים</span>
           <span style={{ fontWeight: 700 }}>{pct}%</span>
         </div>
 
-        {/* Members */}
+        {/* Recent activity */}
+        <div style={{ fontSize: 11, color: 'var(--orange)', fontWeight: 600, marginBottom: 8 }}>
+          🔥 {recentJoined} הצטרפו ביממה האחרונה
+        </div>
+
+        {/* Member avatars */}
         <div className="squad-members-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div className="member-avatars">
@@ -78,14 +95,27 @@ function SquadCard({ squad: initial }) {
           </div>
         </div>
 
-        {/* Join button */}
+        {/* Actions */}
         {!squad.is_success ? (
-          <button
-            className={`squad-join-btn${squad.joined ? ' joined' : ''}`}
-            onClick={handleJoin}
-          >
-            {squad.joined ? '✓ עמד בקבוצת הלחץ' : 'היכנס לעמוד קבוצת הלחץ'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              className={`squad-join-btn${squad.joined ? ' joined' : ''}`}
+              style={{ flex: 2 }}
+              onClick={handleJoin}
+            >
+              {squad.joined ? '✓ הצטרפת לקבוצה' : '⚡ הצטרף למאבק'}
+            </button>
+            <button
+              onClick={() => onCreateSquad && onCreateSquad()}
+              style={{
+                flex: 1, padding: '11px', border: '1.5px solid var(--gray-200)',
+                borderRadius: 10, background: 'var(--white)', fontFamily: 'Heebo',
+                fontSize: 12, cursor: 'pointer', fontWeight: 600,
+              }}
+            >
+              📤 שתף
+            </button>
+          </div>
         ) : (
           <div style={{
             padding: '11px', textAlign: 'center', fontSize: 14,
@@ -100,10 +130,10 @@ function SquadCard({ squad: initial }) {
   );
 }
 
-export default function Squads({ onCreateShout }) {
+export default function Squads({ onCreateSquad }) {
   const [squads, setSquads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('active'); // active | success | mine
+  const [tab, setTab] = useState('active');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -122,8 +152,20 @@ export default function Squads({ onCreateShout }) {
       <div style={{ background: 'var(--white)', padding: '16px 12px 0', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontSize: 20, fontWeight: 900 }}>קבוצות לחץ</div>
-          <div style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-            🏆 נצחונות המאבק
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={onCreateSquad}
+              style={{
+                background: 'var(--yellow)', border: 'none', borderRadius: 20,
+                padding: '6px 12px', fontFamily: 'Heebo', fontSize: 12,
+                fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              ⚡ צור קבוצה חדשה
+            </button>
+            <div style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 700 }}>
+              🏆 נצחונות המאבק
+            </div>
           </div>
         </div>
 
@@ -147,7 +189,7 @@ export default function Squads({ onCreateShout }) {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, paddingBottom: 0 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {[
             { key: 'active', label: 'פעילות' },
             { key: 'success', label: 'נצחונות ✅' },
@@ -174,19 +216,27 @@ export default function Squads({ onCreateShout }) {
         <div className="empty-state">
           <div className="empty-state-icon">⚡</div>
           <div className="empty-state-title">אין קבוצות כאן</div>
-          <div className="empty-state-sub">לחץ על 📣 כדי ליצור קבוצת לחץ חדשה</div>
+          <div className="empty-state-sub">לחץ על "⚡ צור קבוצה חדשה" כדי להתחיל מאבק</div>
+          <button
+            className="btn-primary yellow"
+            style={{ marginTop: 14 }}
+            onClick={onCreateSquad}
+          >
+            ⚡ צור קבוצת לחץ חדשה
+          </button>
         </div>
       ) : (
-        filtered.map(s => <SquadCard key={s.id} squad={s} />)
+        filtered.map(s => <SquadCard key={s.id} squad={s} onCreateSquad={onCreateSquad} />)
       )}
 
-      {/* FAB - yellow circle with megaphone */}
+      {/* FAB — ⚡ create squad */}
       <button
         className="squads-fab"
-        onClick={onCreateShout}
+        onClick={onCreateSquad}
         aria-label="צור קבוצת לחץ"
+        style={{ background: 'var(--yellow)' }}
       >
-        📣
+        ⚡
       </button>
     </>
   );

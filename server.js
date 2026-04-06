@@ -114,7 +114,7 @@ if (catCount === 0) {
     ['תקשורת', '📱', 'telecom'],
     ['רשתות מזון', '🛒', 'food'],
     ['תחבורה ציבורית', '🚌', 'transport'],
-    ['תעופה וטיירות', '✈️', 'aviation'],
+    ['תעופה ותיירות', '✈️', 'aviation'],
   ];
   cats.forEach(c => insertCat.run(...c));
 
@@ -190,6 +190,9 @@ if (catCount === 0) {
   insertNotif.run('alert', 'אירוע רב-נפגעים מתרחש ברכבת ישראל עכשיו. גם אתה נפגעת?', '🚨', 1, '-5760');
 }
 
+// ── Migrations (fix existing data) ───────────────────────────────────────────
+db.prepare("UPDATE categories SET name='תעופה ותיירות' WHERE slug='aviation' AND name='תעופה וטיירות'").run();
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr + 'Z').getTime()) / 1000;
@@ -210,7 +213,7 @@ app.get('/api/categories', (req, res) => {
 
 // Shouts
 app.get('/api/shouts', (req, res) => {
-  const { category, page = 1 } = req.query;
+  const { category, company_id, page = 1 } = req.query;
   const limit = 20;
   const offset = (page - 1) * limit;
   const session = req.headers['x-session'] || 'default';
@@ -222,8 +225,15 @@ app.get('/api/shouts', (req, res) => {
     LEFT JOIN categories cat ON s.category_id = cat.id
   `;
 
+  const conditions = [];
   if (category && category !== 'all') {
-    query += ` WHERE cat.slug = '${category.replace(/'/g, '')}'`;
+    conditions.push(`cat.slug = '${category.replace(/'/g, '')}'`);
+  }
+  if (company_id) {
+    conditions.push(`s.company_id = ${parseInt(company_id, 10)}`);
+  }
+  if (conditions.length) {
+    query += ' WHERE ' + conditions.join(' AND ');
   }
 
   query += ` ORDER BY s.created_at DESC LIMIT ${limit} OFFSET ${offset}`;

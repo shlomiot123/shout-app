@@ -15,12 +15,6 @@ export default function Landing({ onEnter, onCorporate }) {
           האפליקציה שצוברת את הקולות הבודדים והופכת אותם לכוח חברתי צרכני משפיע.
         </p>
 
-        <div className="landing-rewrite">
-          <p>לשתף את העולם במה שמכעיס אותך.</p>
-          <p>להצטרף לקבוצות לחץ וליצור יחד שינוי אמיתי.</p>
-          <p>נתונים שהחברות לא יוכלו להתעלם מהם.</p>
-        </div>
-
         <div className="landing-features">
           <div className="landing-feature landing-feature-pill">
             📣 לצעוק – לשתף את מה שמציק לך
@@ -33,11 +27,13 @@ export default function Landing({ onEnter, onCorporate }) {
           </div>
         </div>
 
-        <button className="landing-cta" onClick={onEnter}>
-          📣 I want to Shout
+        {/* Main CTA — black */}
+        <button className="landing-cta landing-cta-black" onClick={onEnter}>
+          אני רוצה להצטרף ל Shout 📣
         </button>
 
-        <button className="landing-cta-corp" onClick={onCorporate || onEnter}>
+        {/* Corporate — blue */}
+        <button className="landing-cta-corp-blue" onClick={onCorporate || onEnter}>
           🏢 כניסת נציג תאגיד
         </button>
 

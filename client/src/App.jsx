@@ -43,6 +43,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [feedKey, setFeedKey] = useState(0);
+  const [companiesFilter, setCompaniesFilter] = useState(null);
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -57,9 +58,11 @@ export default function App() {
     return () => clearInterval(t);
   }, [fetchUnread]);
 
-  function navigate(s) {
+  function navigate(s, filter) {
     setScreen(s);
     if (s === 'notifications') fetchUnread();
+    if (s === 'companies' && filter) setCompaniesFilter(filter);
+    else if (s !== 'companies') setCompaniesFilter(null);
   }
 
   function onShoutCreated() {
@@ -123,7 +126,7 @@ export default function App() {
         {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} onNav={navigate} onOpenCreateSquad={openCreateSquad} />}
         {screen === 'squads'       && <Squads onCreateShout={() => setShowCreate(true)} onCreateSquad={openCreateSquad} />}
         {screen === 'leaderboard'  && <Leaderboard onCompanies={() => navigate('companies')} />}
-        {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} />}
+        {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} initialFilter={companiesFilter} />}
         {screen === 'notifications' && <Notifications />}
       </div>
 

@@ -1,30 +1,28 @@
 import { useState, useEffect } from 'react';
 import { API } from '../App.jsx';
-
-const ANGER_OPTIONS = [
-  { level: 1, icon: '😐', label: 'מרוגז' },
-  { level: 2, icon: '😤', label: 'זועם' },
-  { level: 3, icon: '😠', label: 'כועס' },
-  { level: 4, icon: '🤬', label: 'רותח' },
-  { level: 5, icon: '🔥', label: 'נפצץ' },
-];
+import { FlameSelectorFull } from './FlamePicker.jsx';
 
 const CHURN_OPTIONS = [
-  'כן, מיידית',
+  'כן, מחפש/ת חלופה מיידית',
   'בהתלבטות',
   'לא ניתן - מונופול',
+  'אין אלטרנטיבה',
   'לא רלוונטי',
 ];
 
 const INFLUENCE_OPTIONS = [
-  { key: 'personal', icon: '👤', label: 'אישי', sub: 'קרה לי לבד' },
-  { key: 'family', icon: '👨‍👩‍👧', label: 'משפחתי', sub: 'קרה לבני ביתי' },
-  { key: 'neighborhood', icon: '🏘️', label: 'שכונה', sub: 'שמעתי משכנים' },
-  { key: 'city', icon: '🏙️', label: 'עיר', sub: 'כל העיר סובלת' },
-  { key: 'national', icon: '🇮🇱', label: 'ארצי', sub: 'בעיה לאומית' },
+  { key: 'personal',      icon: '👤',       label: 'אישי',           sub: 'קרה לי לבד' },
+  { key: 'family',        icon: '👨‍👩‍👧',      label: 'משפחתי',        sub: 'קרה לבני ביתי' },
+  { key: 'neighborhood',  icon: '🏘️',       label: 'שכונה / קהילה',  sub: 'שכנים ומכרים' },
+  { key: 'city',          icon: '🏙️',       label: 'עיר',            sub: 'כל העיר סובלת' },
+  { key: 'national',      icon: '🇮🇱',       label: 'ארצי',           sub: 'בעיה לאומית' },
 ];
 
-const PROFANITY_WORDS = ['כסיל', 'מטומטם', 'אידיוט', 'חרא', 'זין', 'כאס', 'בן זונה', 'שרמוטה'];
+const PROFANITY_WORDS = [
+  'כסיל', 'מטומטם', 'אידיוט', 'חרא', 'זין', 'כאס', 'בן זונה', 'שרמוטה',
+  'מזדיין', 'כלבה', 'בן כלבה', 'זונה', 'כלב', 'סרטן', 'מפגר', 'מפגרת',
+  'טמבל', 'בהמה', 'חמור', 'ממזר',
+];
 
 function hasProfanity(text) {
   const lower = text.toLowerCase();
@@ -55,15 +53,18 @@ export default function CreateShout({ onClose, onCreated }) {
   const [showProfanityWarning, setShowProfanityWarning] = useState(false);
   const [sanitizedContent, setSanitizedContent] = useState('');
 
-  const TOTAL_STEPS = 6;
-
   useEffect(() => {
     API.get('/api/categories').then(d => setCategories(d.filter(c => c.slug !== 'all')));
     API.get('/api/companies').then(setCompanies);
   }, []);
 
-  const filteredCompanies = companies.filter(c =>
-    c.name.includes(companySearch) || c.category_name?.includes(companySearch)
+  // Filter companies by selected category
+  const catCompanies = selectedCat
+    ? companies.filter(c => c.category_id === selectedCat.id)
+    : companies;
+
+  const filteredCompanies = catCompanies.filter(c =>
+    !companySearch || c.name.includes(companySearch) || c.category_name?.includes(companySearch)
   );
 
   function handleNextFromStep1() {
@@ -123,7 +124,7 @@ export default function CreateShout({ onClose, onCreated }) {
             <div style={{ fontSize: 14, fontWeight: 700 }}>
               {localStorage.getItem('shout_nickname') || 'אנונימי_84'}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--gray-500)' }}>
               🌐 פומבי למתחרים
             </div>
           </div>
@@ -132,7 +133,7 @@ export default function CreateShout({ onClose, onCreated }) {
         <div className="modal-body">
           {/* Step indicator */}
           <div className="modal-step-indicator">
-            {[1, 2, 3, 4, 5, 6].map(s => (
+            {[1,2,3,4,5,6].map(s => (
               <div
                 key={s}
                 className={`step-dot${step === s ? ' active' : step > s ? ' done' : ''}`}
@@ -157,7 +158,7 @@ export default function CreateShout({ onClose, onCreated }) {
           {/* Step 1: Write */}
           {step === 1 && !showProfanityWarning && (
             <>
-              <div className="modal-section-label">ספר לנו על החוויה שלך - בלי קללות ושפה בוטה. מותר לכעוס!</div>
+              <div className="modal-section-label">כאן ניתן לספר על החוויה שלך — בלי קללות ושפה בוטה. מותר לכעוס!</div>
               <textarea
                 className="modal-textarea"
                 rows={5}
@@ -182,7 +183,7 @@ export default function CreateShout({ onClose, onCreated }) {
                 <div style={{
                   flex: 1, border: '1.5px dashed var(--gray-300)', borderRadius: 10,
                   padding: '10px', display: 'flex', alignItems: 'center', gap: 8,
-                  cursor: 'pointer', color: 'var(--gray-500)', fontSize: 13,
+                  color: 'var(--gray-500)', fontSize: 13,
                 }}>
                   <span>📍</span>
                   <input
@@ -251,7 +252,7 @@ export default function CreateShout({ onClose, onCreated }) {
                     <div
                       key={c.id}
                       className={`cat-option${selectedCat?.id === c.id ? ' selected' : ''}`}
-                      onClick={() => setSelectedCat(c)}
+                      onClick={() => { setSelectedCat(c); setSelectedCompany(null); }}
                     >
                       <span style={{ fontSize: 20 }}>{icon}</span>
                       {c.name}
@@ -272,10 +273,12 @@ export default function CreateShout({ onClose, onCreated }) {
             </>
           )}
 
-          {/* Step 4: Company */}
+          {/* Step 4: Company — filtered by selected category */}
           {step === 4 && (
             <>
-              <div className="modal-section-label">בחר חברה מהרשימה:</div>
+              <div className="modal-section-label">
+                בחר חברה {selectedCat ? `מתחום ${selectedCat.name}` : 'מהרשימה'}:
+              </div>
               <input
                 className="company-search"
                 placeholder="חפש חברה..."
@@ -283,6 +286,11 @@ export default function CreateShout({ onClose, onCreated }) {
                 onChange={e => setCompanySearch(e.target.value)}
               />
               <div className="company-list">
+                {filteredCompanies.length === 0 && (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)', fontSize: 13 }}>
+                    לא נמצאו חברות בקטגוריה זו
+                  </div>
+                )}
                 {filteredCompanies.map(c => (
                   <div
                     key={c.id}
@@ -296,27 +304,22 @@ export default function CreateShout({ onClose, onCreated }) {
               </div>
               <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setStep(3)}>חזור</button>
-                <button className="btn-primary" onClick={() => setStep(5)}>המשך →</button>
+                <button
+                  className="btn-primary"
+                  disabled={!selectedCompany}
+                  onClick={() => setStep(5)}
+                >
+                  המשך →
+                </button>
               </div>
             </>
           )}
 
-          {/* Step 5: Anger level */}
+          {/* Step 5: Anger level — flames */}
           {step === 5 && (
             <>
               <div className="modal-section-label">מה רמת הכעס שלך?</div>
-              <div className="anger-selector">
-                {ANGER_OPTIONS.map(a => (
-                  <div
-                    key={a.level}
-                    className={`anger-option${angerLevel === a.level ? ' selected' : ''}`}
-                    onClick={() => setAngerLevel(a.level)}
-                  >
-                    {a.icon}
-                    <span>{a.label}</span>
-                  </div>
-                ))}
-              </div>
+              <FlameSelectorFull value={angerLevel} onChange={setAngerLevel} />
               <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setStep(4)}>חזור</button>
                 <button className="btn-primary" onClick={() => setStep(6)}>המשך →</button>

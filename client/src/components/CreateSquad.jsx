@@ -19,6 +19,8 @@ export default function CreateSquad({ initialShout, onClose, onCreated }) {
   const [goalDesc, setGoalDesc] = useState('');
   const [threshold, setThreshold] = useState(1000);
   const [companies, setCompanies] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCat, setSelectedCat] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(
     initialShout?.company_id
       ? { id: initialShout.company_id, name: initialShout.company_name }
@@ -30,9 +32,14 @@ export default function CreateSquad({ initialShout, onClose, onCreated }) {
 
   useEffect(() => {
     API.get('/api/companies').then(setCompanies);
+    API.get('/api/categories').then(d => setCategories(d.filter(c => c.slug !== 'all')));
   }, []);
 
-  const filteredCompanies = companies.filter(
+  const catCompanies = selectedCat
+    ? companies.filter(c => c.category_id === selectedCat.id)
+    : companies;
+
+  const filteredCompanies = catCompanies.filter(
     c => !companySearch || c.name.includes(companySearch)
   );
 
@@ -138,32 +145,53 @@ export default function CreateSquad({ initialShout, onClose, onCreated }) {
 
           {step === 2 && (
             <>
-              <div className="modal-section-label">כנגד איזה חברה?</div>
-              <input
-                className="company-search"
-                placeholder="חפש חברה..."
-                value={companySearch}
-                onChange={e => setCompanySearch(e.target.value)}
-              />
-              <div className="company-list">
-                <div
-                  className={`company-option${!selectedCompany ? ' selected' : ''}`}
-                  onClick={() => setSelectedCompany(null)}
-                >
-                  <span>ללא חברה ספציפית (כללי)</span>
-                  {!selectedCompany && <span>✓</span>}
-                </div>
-                {filteredCompanies.map(c => (
+              <div className="modal-section-label">בחר קטגוריה:</div>
+              <div className="cat-grid" style={{ marginBottom: 14 }}>
+                {categories.map(c => (
                   <div
                     key={c.id}
-                    className={`company-option${selectedCompany?.id === c.id ? ' selected' : ''}`}
-                    onClick={() => setSelectedCompany(c)}
+                    className={`cat-option${selectedCat?.id === c.id ? ' selected' : ''}`}
+                    onClick={() => { setSelectedCat(c); setSelectedCompany(null); setCompanySearch(''); }}
                   >
-                    <span>{c.name}</span>
-                    {selectedCompany?.id === c.id && <span>✓</span>}
+                    <span style={{ fontSize: 20 }}>{c.slug === 'health' ? '🩺' : c.icon}</span>
+                    {c.name}
                   </div>
                 ))}
               </div>
+
+              {selectedCat && (
+                <>
+                  <div className="modal-section-label">
+                    בחר חברה מתחום {selectedCat.name}:
+                  </div>
+                  <input
+                    className="company-search"
+                    placeholder="חפש חברה..."
+                    value={companySearch}
+                    onChange={e => setCompanySearch(e.target.value)}
+                  />
+                  <div className="company-list">
+                    <div
+                      className={`company-option${!selectedCompany ? ' selected' : ''}`}
+                      onClick={() => setSelectedCompany(null)}
+                    >
+                      <span>ללא חברה ספציפית (כללי)</span>
+                      {!selectedCompany && <span>✓</span>}
+                    </div>
+                    {filteredCompanies.map(c => (
+                      <div
+                        key={c.id}
+                        className={`company-option${selectedCompany?.id === c.id ? ' selected' : ''}`}
+                        onClick={() => setSelectedCompany(c)}
+                      >
+                        <span>{c.name}</span>
+                        {selectedCompany?.id === c.id && <span>✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setStep(1)}>חזור</button>
                 <button className="btn-primary" onClick={() => setStep(3)}>המשך →</button>
