@@ -4,7 +4,7 @@ import { API } from '../App.jsx';
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4'];
 const GOAL_ICONS = { legal: '⚖️', public: '📢', regulatory: '🏛️', investor: '📈' };
 
-function SquadCard({ squad: initial, onCreateSquad }) {
+function SquadCard({ squad: initial, onCreateSquad, requireLogin }) {
   const [squad, setSquad] = useState(initial);
 
   async function handleJoin() {
@@ -101,7 +101,7 @@ function SquadCard({ squad: initial, onCreateSquad }) {
             <button
               className={`squad-join-btn${squad.joined ? ' joined' : ''}`}
               style={{ flex: 2 }}
-              onClick={handleJoin}
+              onClick={() => requireLogin ? requireLogin(handleJoin) : handleJoin()}
             >
               {squad.joined ? '✓ הצטרפת לקבוצה' : '⚡ הצטרף למאבק'}
             </button>
@@ -130,7 +130,7 @@ function SquadCard({ squad: initial, onCreateSquad }) {
   );
 }
 
-export default function Squads({ onCreateSquad }) {
+export default function Squads({ onCreateSquad, requireLogin }) {
   const [squads, setSquads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('active');
@@ -226,7 +226,7 @@ export default function Squads({ onCreateSquad }) {
           </button>
         </div>
       ) : (
-        filtered.map(s => <SquadCard key={s.id} squad={s} onCreateSquad={onCreateSquad} />)
+        filtered.map(s => <SquadCard key={s.id} squad={s} onCreateSquad={onCreateSquad} requireLogin={requireLogin} />)
       )}
 
       {/* FAB — ⚡ create squad */}

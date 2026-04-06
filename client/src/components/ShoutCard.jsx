@@ -24,7 +24,7 @@ function getCompanyColor(name) {
   return COMPANY_COLORS[name] || '#6B7280';
 }
 
-export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpenCreateSquad }) {
+export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpenCreateSquad, requireLogin }) {
   const [shout, setShout] = useState(initial);
   const [showReply, setShowReply] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -243,21 +243,21 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
       <div className="shout-actions">
         <button
           className={`action-btn${shout.echoed ? ' echoed' : ''}${echoAnim ? ' echo-anim' : ''}`}
-          onClick={handleEcho}
+          onClick={() => requireLogin ? requireLogin(handleEcho) : handleEcho()}
         >
           <span className="action-icon">{shout.echoed ? '🤝' : '🤜'}</span>
           {shout.echoed ? 'הדהדתי' : 'קרה גם לי'}
         </button>
         <button
           className={`action-btn${shout.boosted ? ' boosted' : ''}`}
-          onClick={() => setShowBoostPicker(p => !p)}
+          onClick={() => requireLogin ? requireLogin(() => setShowBoostPicker(p => !p)) : setShowBoostPicker(p => !p)}
         >
           <span className="action-icon">🔥</span>
           {shout.boosts > 0 ? `בוסט (${shout.boosts})` : 'בוסט'}
         </button>
         <button
           className="action-btn"
-          onClick={() => setShowReply(r => !r)}
+          onClick={() => requireLogin ? requireLogin(() => setShowReply(r => !r)) : setShowReply(r => !r)}
         >
           <span className="action-icon">💬</span>
           תגובה

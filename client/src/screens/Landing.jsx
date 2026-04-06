@@ -15,18 +15,6 @@ export default function Landing({ onEnter, onCorporate }) {
           האפליקציה שצוברת את הקולות הבודדים והופכת אותם לכוח חברתי צרכני משפיע.
         </p>
 
-        <div className="landing-features">
-          <div className="landing-feature landing-feature-pill">
-            📣 לצעוק – לשתף את מה שמציק לך
-          </div>
-          <div className="landing-feature landing-feature-pill">
-            👥 להתארגן – לצבור כח ביחד ולנקוט פעולה
-          </div>
-          <div className="landing-feature landing-feature-pill">
-            👁 להשפיע – ליצור קבוצת לחץ שתחייב תגובה
-          </div>
-        </div>
-
         {/* Main CTA — black */}
         <button className="landing-cta landing-cta-black" onClick={onEnter}>
           אני רוצה להצטרף ל Shout 📣

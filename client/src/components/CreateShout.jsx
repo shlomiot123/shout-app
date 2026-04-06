@@ -5,15 +5,14 @@ import { FlameSelectorFull } from './FlamePicker.jsx';
 const CHURN_OPTIONS = [
   'כן, מחפש/ת חלופה מיידית',
   'בהתלבטות',
-  'לא ניתן - מונופול',
-  'אין אלטרנטיבה',
+  'לא ניתן, אין אלטרנטיבה',
   'לא רלוונטי',
 ];
 
 const INFLUENCE_OPTIONS = [
   { key: 'personal',      icon: '👤',       label: 'אישי',           sub: 'קרה לי לבד' },
   { key: 'family',        icon: '👨‍👩‍👧',      label: 'משפחתי',        sub: 'קרה לבני ביתי' },
-  { key: 'neighborhood',  icon: '🏘️',       label: 'שכונה / קהילה',  sub: 'שכנים ומכרים' },
+  { key: 'neighborhood',  icon: '🏘️',       label: 'שכונה / קהילה / קבוצה',  sub: 'שכנים, מכרים, קבוצה' },
   { key: 'city',          icon: '🏙️',       label: 'עיר',            sub: 'כל העיר סובלת' },
   { key: 'national',      icon: '🇮🇱',       label: 'ארצי',           sub: 'בעיה לאומית' },
 ];
@@ -52,6 +51,7 @@ export default function CreateShout({ onClose, onCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [showProfanityWarning, setShowProfanityWarning] = useState(false);
   const [sanitizedContent, setSanitizedContent] = useState('');
+  const [imageFile, setImageFile] = useState(null);
 
   useEffect(() => {
     API.get('/api/categories').then(d => setCategories(d.filter(c => c.slug !== 'all')));
@@ -173,13 +173,20 @@ export default function CreateShout({ onClose, onCreated }) {
               </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <div style={{
-                  flex: 1, border: '1.5px dashed var(--gray-300)', borderRadius: 10,
+                <label style={{
+                  flex: 1, border: `1.5px dashed ${imageFile ? 'var(--green)' : 'var(--gray-300)'}`, borderRadius: 10,
                   padding: '10px', display: 'flex', alignItems: 'center', gap: 8,
-                  cursor: 'pointer', color: 'var(--gray-500)', fontSize: 13,
+                  cursor: 'pointer', color: imageFile ? 'var(--green)' : 'var(--gray-500)', fontSize: 13,
+                  background: imageFile ? 'var(--green-light)' : 'transparent',
                 }}>
-                  <span>📎</span> הוסף תמונה להוכחה
-                </div>
+                  <input
+                    type="file" accept="image/*" capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={e => setImageFile(e.target.files?.[0] || null)}
+                  />
+                  <span>📎</span>
+                  {imageFile ? imageFile.name.slice(0, 20) : 'הוסף תמונה להוכחה'}
+                </label>
                 <div style={{
                   flex: 1, border: '1.5px dashed var(--gray-300)', borderRadius: 10,
                   padding: '10px', display: 'flex', alignItems: 'center', gap: 8,

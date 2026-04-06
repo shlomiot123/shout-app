@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header.jsx';
-import BottomNav from './components/BottomNav.jsx';
 import HamburgerMenu from './components/HamburgerMenu.jsx';
 import CreateShout from './components/CreateShout.jsx';
 import CreateSquad from './components/CreateSquad.jsx';
+import LoginModal from './components/LoginModal.jsx';
 import Landing from './screens/Landing.jsx';
 import Onboarding from './screens/Onboarding.jsx';
 import Feed from './screens/Feed.jsx';
@@ -44,6 +44,10 @@ export default function App() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [feedKey, setFeedKey] = useState(0);
   const [companiesFilter, setCompaniesFilter] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+
+  function isLoggedIn() { return !!localStorage.getItem('shout_nickname'); }
+  function requireLogin(action) { if (isLoggedIn()) action(); else setShowLogin(true); }
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -78,8 +82,10 @@ export default function App() {
   }
 
   function openCreateSquad(shout) {
-    setCreateSquadShout(shout || null);
-    setShowCreateSquad(true);
+    requireLogin(() => {
+      setCreateSquadShout(shout || null);
+      setShowCreateSquad(true);
+    });
   }
 
   const isApp = !['landing', 'onboarding', 'corporate', 'profile'].includes(screen);
@@ -123,19 +129,15 @@ export default function App() {
 
       <div className="screen-content">
         {screen === 'landing'      && <Landing onEnter={() => navigate('feed')} onCorporate={() => navigate('corporate')} />}
-        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => setShowCreate(true)} onNav={navigate} onOpenCreateSquad={openCreateSquad} />}
-        {screen === 'squads'       && <Squads onCreateShout={() => setShowCreate(true)} onCreateSquad={openCreateSquad} />}
+        {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => requireLogin(() => setShowCreate(true))} onNav={navigate} onOpenCreateSquad={openCreateSquad} requireLogin={requireLogin} />}
+        {screen === 'squads'       && <Squads onCreateShout={() => requireLogin(() => setShowCreate(true))} onCreateSquad={openCreateSquad} requireLogin={requireLogin} />}
         {screen === 'leaderboard'  && <Leaderboard onCompanies={() => navigate('companies')} />}
         {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} initialFilter={companiesFilter} />}
         {screen === 'notifications' && <Notifications />}
       </div>
 
       {isApp && (
-        <BottomNav screen={screen} onNav={navigate} />
-      )}
-
-      {isApp && (
-        <button className="fab" onClick={() => setShowCreate(true)} aria-label="יצירת צעקה">
+        <button className="fab" onClick={() => requireLogin(() => setShowCreate(true))} aria-label="יצירת צעקה">
           📣
         </button>
       )}
@@ -164,6 +166,13 @@ export default function App() {
 
       {showSearch && (
         <SearchOverlay onClose={() => setShowSearch(false)} onNav={navigate} />
+      )}
+
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onLoggedIn={() => { setShowLogin(false); setFeedKey(k => k + 1); }}
+        />
       )}
     </div>
   );

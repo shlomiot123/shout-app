@@ -30,7 +30,7 @@ function loadInterests() {
   try { return JSON.parse(localStorage.getItem('shout_interests') || '{}'); } catch { return {}; }
 }
 
-export default function Feed({ onCreateShout, onNav, onOpenCreateSquad }) {
+export default function Feed({ onCreateShout, onNav, onOpenCreateSquad, requireLogin }) {
   const [shouts, setShouts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('all');
@@ -183,7 +183,7 @@ export default function Feed({ onCreateShout, onNav, onOpenCreateSquad }) {
           </div>
         ) : (
           displayShouts.map(shout => (
-            <ShoutCard key={shout.id} shout={shout} onNav={onNav} onOpenCreateSquad={onOpenCreateSquad} />
+            <ShoutCard key={shout.id} shout={shout} onNav={onNav} onOpenCreateSquad={onOpenCreateSquad} requireLogin={requireLogin} />
           ))
         )
       )}

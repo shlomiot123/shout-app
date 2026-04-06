@@ -328,7 +328,7 @@ app.get('/api/squads', (req, res) => {
     FROM squads s
     LEFT JOIN companies c ON s.company_id = c.id
     LEFT JOIN categories cat ON s.category_id = cat.id
-    ORDER BY s.current_members DESC
+    ORDER BY s.created_at DESC
   `).all();
 
   const result = rows.map(r => {
@@ -345,7 +345,7 @@ app.post('/api/squads', (req, res) => {
 
   const result = db.prepare(`
     INSERT INTO squads (name, description, company_id, category_id, target_members, current_members, goal_description, goal_type)
-    VALUES (?,?,?,?,?,1,?,?)
+    VALUES (?,?,?,?,?,0,?,?)
   `).run(name, description || '', company_id || null, category_id || null, target_members || 1000, goal_description || '', goal_type || 'legal');
 
   res.json(db.prepare('SELECT * FROM squads WHERE id=?').get(result.lastInsertRowid));

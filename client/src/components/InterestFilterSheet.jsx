@@ -82,7 +82,7 @@ export default function InterestFilterSheet({ onClose, onSave }) {
         <div className="modal-body" style={{ paddingTop: 4 }}>
           {categories.map(cat => {
             const icon = cat.slug === 'health' ? '🩺' : cat.icon;
-            const catCos = companies.filter(c => c.category_id === cat.id);
+            const catCos = companies.filter(c => c.category_name === cat.name);
             const isOpen = expandedCat === cat.slug;
             const catSelected = isCatSelected(cat.slug);
 
