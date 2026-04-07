@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { API } from '../App.jsx';
 import { FlameDisplay, FlamePickerRow } from './FlamePicker.jsx';
+import { useReveal } from '../hooks/useReveal.js';
 
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4','#84CC16'];
 
@@ -87,9 +88,10 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
   const userResponses = shout.responses?.filter(r => !r.is_official) || [];
   const totalResponses = (shout.responses || []).length;
   const companyColor = getCompanyColor(shout.company_name || '');
+  const revealRef = useReveal();
 
   return (
-    <div className={`shout-card${shout.is_resolved ? ' resolved' : ''}`}>
+    <div ref={revealRef} className={`shout-card reveal${shout.is_resolved ? ' resolved' : ''}`}>
       {/* Header */}
       <div className="shout-header">
         <div className="shout-meta">

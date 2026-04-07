@@ -1,5 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { API } from '../App.jsx';
+import { useReveal } from '../hooks/useReveal.js';
+
+function RevealRow({ children, delay }) {
+  const ref = useReveal();
+  return (
+    <div ref={ref} className="reveal" style={{ transitionDelay: delay }}>
+      {children}
+    </div>
+  );
+}
 
 const CAT_ICONS = {
   banks: '🏦', insurance: '🛡️', health: '🩺', telecom: '📱',
@@ -111,7 +121,8 @@ export default function Leaderboard() {
           const catIcon = CAT_ICONS[co.category_name] || '🏢';
 
           return (
-            <div key={co.id} className={`leaderboard-card rank-${rank}`}>
+            <RevealRow key={co.id} delay={`${Math.min(i * 0.06, 0.3)}s`}>
+            <div className={`leaderboard-card rank-${rank}`}>
               <div className="leaderboard-row">
                 <div className="lb-rank">{getRankEmoji(rank)}</div>
                 <div className="lb-company-avatar" style={{ background: rank <= 3 ? angerColor + '20' : 'var(--gray-100)' }}>
@@ -150,6 +161,7 @@ export default function Leaderboard() {
                 </div>
               </div>
             </div>
+            </RevealRow>
           );
         })
       )}

@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react';
 import { API } from '../App.jsx';
+import { useReveal } from '../hooks/useReveal.js';
+
+function RevealRow({ children, delay }) {
+  const ref = useReveal();
+  return (
+    <div ref={ref} className="reveal" style={{ transitionDelay: delay }}>
+      {children}
+    </div>
+  );
+}
 
 const CAT_ICONS = {
   banks: '🏦', insurance: '🛡️', health: '🩺', telecom: '📱',
@@ -89,14 +99,14 @@ export default function Companies({ onCreateShout, initialFilter }) {
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-500)' }}>טוען...</div>
       ) : (
-        filtered.map(co => {
+        filtered.map((co, i) => {
           const icon = CAT_ICONS[co.category_name?.toLowerCase().replace(/[^a-z-]/g,'')] || co.category_icon || '🏢';
           const isExpanded = expandedId === co.id;
           const hasJoined = JOINED_SHOUT.includes(co.name);
           const monthly = monthlyShouts(co.total_shouts);
 
           return (
-            <div key={co.id}>
+            <RevealRow key={co.id} delay={`${Math.min(i * 0.05, 0.25)}s`}><div>
               <div
                 className="company-row"
                 onClick={() => setExpandedId(isExpanded ? null : co.id)}
@@ -177,7 +187,7 @@ export default function Companies({ onCreateShout, initialFilter }) {
                   </button>
                 </div>
               )}
-            </div>
+            </div></RevealRow>
           );
         })
       )}

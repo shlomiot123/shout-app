@@ -2740,3 +2740,35 @@ html, body {
   min-height: 24px;
 }
 
+
+/* ── Scroll Reveal Animations ────────────────────────────────────────────────*/
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.42s ease, transform 0.42s ease;
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-d1 { transition-delay: 0.07s; }
+.reveal-d2 { transition-delay: 0.14s; }
+.reveal-d3 { transition-delay: 0.21s; }
+.reveal-d4 { transition-delay: 0.28s; }
+.reveal-d5 { transition-delay: 0.35s; }
+
+/* Landing entrance animations */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.land-anim-logo    { animation: fadeIn 0.5s ease both; animation-delay: 0.1s; }
+.land-anim-0       { animation: fadeSlideUp 0.5s ease both; animation-delay: 0.2s; }
+.land-anim-1       { animation: fadeSlideUp 0.5s ease both; animation-delay: 0.35s; }
+.land-anim-2       { animation: fadeSlideUp 0.5s ease both; animation-delay: 0.5s; }
+.land-anim-3       { animation: fadeSlideUp 0.5s ease both; animation-delay: 0.62s; }
+.land-anim-4       { animation: fadeSlideUp 0.5s ease both; animation-delay: 0.74s; }
