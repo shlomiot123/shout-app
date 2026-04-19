@@ -253,8 +253,97 @@ if (catCount === 0) {
   insertNotif.run('alert', 'אירוע רב-נפגעים מתרחש ברכבת ישראל עכשיו. גם אתה נפגעת?', '🚨', 1, '-5760');
 }
 
-// ── Migrations (fix existing data) ───────────────────────────────────────────
+// ── Migrations ───────────────────────────────────────────────────────────────
 db.prepare("UPDATE categories SET name='תעופה ותיירות' WHERE slug='aviation' AND name='תעופה וטיירות'").run();
+
+// Add missing categories
+const addCat = db.prepare("INSERT OR IGNORE INTO categories (name, icon, slug) VALUES (?,?,?)");
+addCat.run('קמעונאות ואופנה', '🛍️', 'retail');
+addCat.run('אנרגיה וחשמל', '⚡', 'energy');
+addCat.run('בנקאות דיגיטלית ואשראי', '💳', 'fintech');
+addCat.run('דיור ונדל"ן', '🏠', 'realestate');
+
+// Add missing companies (INSERT OR IGNORE = safe to run on existing DB)
+const addCo = db.prepare("INSERT OR IGNORE INTO companies (name, category_id, anger_score, response_rate, total_shouts, resolved_shouts) VALUES (?,?,?,?,?,?)");
+const catId = (slug) => db.prepare("SELECT id FROM categories WHERE slug=?").get(slug)?.id;
+
+// בנקים
+addCo.run('בנק מזרחי-טפחות',   catId('banks'),   52, 63, 1450, 942);
+addCo.run('בנק אוצר החייל',    catId('banks'),   47, 70, 980,  686);
+addCo.run('בנק יהב',           catId('banks'),   41, 75, 620,  465);
+addCo.run('כאל',               catId('fintech'), 77, 31, 3100, 961);
+addCo.run('ישראכרט',           catId('fintech'), 72, 35, 2800, 980);
+addCo.run('מקס (לאומי קארד)',  catId('fintech'), 68, 40, 2400, 960);
+addCo.run('פייבוקס',           catId('fintech'), 55, 52, 1100, 572);
+
+// ביטוח ופנסיה
+addCo.run('מגדל ביטוח',        catId('insurance'), 79, 28, 4100, 1148);
+addCo.run('הפניקס',            catId('insurance'), 84, 22, 5200, 1144);
+addCo.run('מנורה מבטחים',      catId('insurance'), 71, 33, 3600, 1188);
+addCo.run('איילון ביטוח',      catId('insurance'), 65, 44, 2700, 1188);
+addCo.run('הכשרה ביטוח',       catId('insurance'), 69, 38, 2200, 836);
+addCo.run('ביטוח ישיר',        catId('insurance'), 60, 50, 1900, 950);
+
+// קופות חולים
+addCo.run('קופת חולים כללית',  catId('health'),   65, 47, 4200, 1974);
+addCo.run('קופת חולים לאומית', catId('health'),   58, 55, 2800, 1540);
+addCo.run('קופת חולים מאוחדת', catId('health'),   61, 50, 3100, 1550);
+
+// תקשורת
+addCo.run('בזק',               catId('telecom'), 86, 20, 7200, 1440);
+addCo.run('HOT Mobile',        catId('telecom'), 89, 16, 6800, 1088);
+addCo.run('012 סמייל',         catId('telecom'), 75, 30, 3400, 1020);
+addCo.run('גיגא (Giga)',       catId('telecom'), 62, 48, 1800, 864);
+addCo.run('רמי לוי תקשורת',   catId('telecom'), 58, 55, 1600, 880);
+addCo.run('019 סמארטנט',       catId('telecom'), 66, 42, 2100, 882);
+
+// רשתות מזון
+addCo.run('רמי לוי',           catId('food'), 38, 80, 980,  784);
+addCo.run('מחסני השוק',        catId('food'), 42, 74, 1100, 814);
+addCo.run('יינות ביתן',        catId('food'), 49, 68, 1400, 952);
+addCo.run('קו-אופ',            catId('food'), 45, 71, 920,  653);
+addCo.run('AM:PM',             catId('food'), 52, 62, 1200, 744);
+addCo.run('יוחננוף',           catId('food'), 40, 77, 850,  655);
+addCo.run('מגה',               catId('food'), 53, 61, 1300, 793);
+
+// תחבורה ציבורית
+addCo.run('אגד',               catId('transport'), 88, 18, 9200, 1656);
+addCo.run('דן',                catId('transport'), 81, 24, 6800, 1632);
+addCo.run('קווים',             catId('transport'), 78, 27, 5400, 1458);
+addCo.run('מטרופולין',         catId('transport'), 74, 32, 4200, 1344);
+addCo.run('רכבת קלה (נת"ע)',  catId('transport'), 69, 40, 3100, 1240);
+addCo.run('אלקטרה אווניו',     catId('transport'), 71, 36, 3400, 1224);
+
+// תעופה ותיירות
+addCo.run('ויזאייר',           catId('aviation'), 82, 21, 4800, 1008);
+addCo.run('ריינאייר',          catId('aviation'), 85, 17, 5600, 952);
+addCo.run('איזי-ג\'ט',         catId('aviation'), 79, 24, 4100, 984);
+addCo.run('booking.com',       catId('aviation'), 71, 36, 3200, 1152);
+addCo.run('Airbnb',            catId('aviation'), 68, 40, 2800, 1120);
+addCo.run('ארקיע',             catId('aviation'), 76, 28, 3800, 1064);
+
+// קמעונאות ואופנה
+addCo.run('זארה ישראל',        catId('retail'), 62, 48, 1900, 912);
+addCo.run('H&M ישראל',         catId('retail'), 58, 53, 1600, 848);
+addCo.run('קפיטל',             catId('retail'), 55, 57, 1400, 798);
+addCo.run('אייבורי',           catId('retail'), 51, 63, 1100, 693);
+addCo.run('KSP',               catId('retail'), 60, 50, 1700, 850);
+addCo.run('Bug',               catId('retail'), 57, 54, 1500, 810);
+addCo.run('שטראוס',            catId('food'),   67, 43, 2300, 989);
+addCo.run('תנובה',             catId('food'),   63, 47, 2000, 940);
+addCo.run('אסם',               catId('food'),   61, 49, 1800, 882);
+
+// אנרגיה
+addCo.run('חברת החשמל',        catId('energy'), 93, 11, 11200, 1232);
+addCo.run('גז ואנרגיה',        catId('energy'), 74, 32, 3800, 1216);
+addCo.run('אנרג\'י',           catId('energy'), 67, 43, 2600, 1118);
+
+// דיור ונדל"ן
+addCo.run('אפריקה מגורים',     catId('realestate'), 79, 27, 3400, 918);
+addCo.run('שיכון ובינוי',      catId('realestate'), 75, 31, 2900, 899);
+addCo.run('נכסים ובניין',      catId('realestate'), 71, 36, 2400, 864);
+addCo.run('דירה להשכיר',       catId('realestate'), 68, 40, 2100, 840);
+addCo.run('יד2 נדל"ן',         catId('realestate'), 55, 56, 1500, 840);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
