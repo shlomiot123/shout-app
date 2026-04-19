@@ -1,8 +1,9 @@
 const TABS = [
-  { key: 'feed',        label: 'הפיד שלי' },
-  { key: 'squads',      label: 'קבוצות לחץ' },
-  { key: 'leaderboard', label: 'תמונת מצב' },
-  { key: 'companies',   label: 'חברות ותאגידים' },
+  { key: 'feed',      label: '🏠 הפיד' },
+  { key: 'squads',    label: '⚡ קבוצות' },
+  { key: 'companies', label: '🏢 חברות' },
+  { key: 'arena',     label: '📊 הזירה' },
+  { key: 'friends',   label: '👥 חברים' },
 ];
 
 export default function Header({ screen, onNav, onHamburger, onSearch, unreadCount }) {

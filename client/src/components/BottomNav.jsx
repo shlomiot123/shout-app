@@ -1,8 +1,9 @@
 const TABS = [
-  { key: 'feed',        icon: '🏠', label: 'הפיד' },
-  { key: 'squads',      icon: '⚡', label: 'קבוצות' },
-  { key: 'leaderboard', icon: '📊', label: 'בושה' },
-  { key: 'companies',   icon: '🏢', label: 'חברות' },
+  { key: 'feed',      icon: '🏠', label: 'הפיד' },
+  { key: 'squads',    icon: '⚡', label: 'קבוצות' },
+  { key: 'companies', icon: '🏢', label: 'חברות' },
+  { key: 'arena',     icon: '📊', label: 'הזירה' },
+  { key: 'friends',   icon: '👥', label: 'חברים' },
 ];
 
 export default function BottomNav({ screen, onNav }) {

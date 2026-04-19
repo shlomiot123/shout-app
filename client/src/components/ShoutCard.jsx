@@ -32,6 +32,9 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
   const [submitting, setSubmitting] = useState(false);
   const [showBoostPicker, setShowBoostPicker] = useState(false);
   const [showSquadMenu, setShowSquadMenu] = useState(false);
+  const [showDotMenu, setShowDotMenu] = useState(false);
+  const [savedState, setSavedState] = useState(false);
+  const [reportedState, setReportedState] = useState(false);
   const [echoAnim, setEchoAnim] = useState(false);
 
   async function handleEcho() {
@@ -123,8 +126,50 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
             </div>
           </div>
         </div>
-        {/* Share button top-right */}
-        <button className="shout-share-btn" onClick={handleShare} aria-label="שתף">📤</button>
+        {/* 3-dot menu */}
+        <div style={{ position: 'relative' }}>
+          <button
+            className="shout-share-btn"
+            onClick={() => setShowDotMenu(v => !v)}
+            aria-label="אפשרויות"
+          >⋯</button>
+          {showDotMenu && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, zIndex: 50,
+              background: 'var(--white)', borderRadius: 12,
+              border: '1.5px solid var(--gray-200)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              minWidth: 160, overflow: 'hidden',
+            }}>
+              {[
+                { icon: savedState ? '✅' : '🔖', label: savedState ? 'נשמר!' : 'שמור צעקה', action: async () => {
+                  const r = await API.post(`/api/shouts/${shout.id}/save`, {});
+                  setSavedState(r.saved);
+                }},
+                { icon: '🔗', label: 'העתק קישור', action: () => navigator.clipboard?.writeText(window.location.href) },
+                { icon: '📤', label: 'שתף', action: handleShare },
+                { icon: reportedState ? '✅' : '🚩', label: reportedState ? 'דווח!' : 'דווח על תוכן', action: async () => {
+                  await API.post(`/api/shouts/${shout.id}/report`, { reason: 'general' });
+                  setReportedState(true);
+                }},
+              ].map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => { item.action(); setShowDotMenu(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', padding: '11px 14px', border: 'none',
+                    background: 'none', cursor: 'pointer', fontFamily: 'Heebo',
+                    fontSize: 13, direction: 'rtl', textAlign: 'right',
+                    borderBottom: i < 3 ? '1px solid var(--gray-100)' : 'none',
+                  }}
+                >
+                  <span>{item.icon}</span>{item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -174,7 +219,7 @@ export default function ShoutCard({ shout: initial, onCreateSquad, onNav, onOpen
       {/* Stats */}
       <div className="shout-stats">
         <span className="stat-item">
-          {shout.echoes.toLocaleString('he-IL')} הדהודים
+          {shout.echoes.toLocaleString('he-IL')} הזדהו ☝️
         </span>
         <span className="stat-dot" />
         <span className="stat-item">

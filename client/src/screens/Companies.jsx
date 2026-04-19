@@ -19,7 +19,7 @@ const CAT_ICONS = {
 // Companies that "joined Shout"
 const JOINED_SHOUT = ['שופרסל', 'רמי לוי', 'פרטנר'];
 
-export default function Companies({ onCreateShout, initialFilter }) {
+export default function Companies({ onCreateShout, initialFilter, onCompanyLobby }) {
   const [companies, setCompanies] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCat, setSelectedCat] = useState('all');
@@ -181,9 +181,9 @@ export default function Companies({ onCreateShout, initialFilter }) {
                   <button
                     className="btn-ghost"
                     style={{ width: '100%' }}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); onCompanyLobby && onCompanyLobby(co.id); }}
                   >
-                    👁 צפה בכל הצעקות נגד {co.name}
+                    🏢 לובי החברה ›
                   </button>
                 </div>
               )}

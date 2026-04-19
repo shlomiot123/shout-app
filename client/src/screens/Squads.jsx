@@ -4,7 +4,7 @@ import { API } from '../App.jsx';
 const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4'];
 const GOAL_ICONS = { legal: '⚖️', public: '📢', regulatory: '🏛️', investor: '📈' };
 
-function SquadCard({ squad: initial, onCreateSquad, requireLogin }) {
+function SquadCard({ squad: initial, onCreateSquad, requireLogin, onSquadLobby }) {
   const [squad, setSquad] = useState(initial);
 
   async function handleJoin() {
@@ -103,17 +103,17 @@ function SquadCard({ squad: initial, onCreateSquad, requireLogin }) {
               style={{ flex: 2 }}
               onClick={() => requireLogin ? requireLogin(handleJoin) : handleJoin()}
             >
-              {squad.joined ? '✓ הצטרפת לקבוצה' : '⚡ הצטרף למאבק'}
+              {squad.joined ? '✓ הצטרפת' : '⚡ הצטרף'}
             </button>
             <button
-              onClick={() => onCreateSquad && onCreateSquad()}
+              onClick={() => onSquadLobby && onSquadLobby(squad.id)}
               style={{
-                flex: 1, padding: '11px', border: '1.5px solid var(--gray-200)',
+                flex: 1, padding: '11px', border: '1.5px solid var(--dark)',
                 borderRadius: 10, background: 'var(--white)', fontFamily: 'Heebo',
-                fontSize: 12, cursor: 'pointer', fontWeight: 600,
+                fontSize: 12, cursor: 'pointer', fontWeight: 700, color: 'var(--dark)',
               }}
             >
-              📤 שתף
+              כנס ללובי ›
             </button>
           </div>
         ) : (
@@ -130,10 +130,10 @@ function SquadCard({ squad: initial, onCreateSquad, requireLogin }) {
   );
 }
 
-export default function Squads({ onCreateSquad, requireLogin }) {
+export default function Squads({ onCreateSquad, requireLogin, onSquadLobby }) {
   const [squads, setSquads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('active');
+  const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -141,7 +141,11 @@ export default function Squads({ onCreateSquad, requireLogin }) {
   }, []);
 
   const filtered = squads.filter(s => {
-    const matchTab = tab === 'success' ? s.is_success : tab === 'mine' ? s.joined : !s.is_success;
+    const matchTab =
+      tab === 'success' ? s.is_success :
+      tab === 'joined'  ? s.joined :
+      tab === 'created' ? false :
+      !s.is_success;
     const matchSearch = !search || s.name.includes(search) || s.company_name?.includes(search);
     return matchTab && matchSearch;
   });
@@ -189,21 +193,22 @@ export default function Squads({ onCreateSquad, requireLogin }) {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 0, overflowX: 'auto' }}>
           {[
-            { key: 'active', label: 'פעילות' },
-            { key: 'success', label: 'נצחונות ✅' },
-            { key: 'mine', label: 'שלי' },
+            { key: 'all',     label: 'כללי' },
+            { key: 'success', label: '🏆 נצחונות' },
+            { key: 'created', label: 'יצרתי' },
+            { key: 'joined',  label: 'הצטרפתי' },
           ].map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               style={{
-                padding: '7px 14px', border: 'none', background: 'none',
-                fontFamily: 'Heebo', fontSize: 13, fontWeight: 600,
-                color: tab === t.key ? 'var(--black)' : 'var(--gray-500)',
-                borderBottom: tab === t.key ? '2.5px solid var(--black)' : '2.5px solid transparent',
-                cursor: 'pointer', transition: 'all 0.15s',
+                flex: 1, padding: '9px 8px', border: 'none', background: 'none',
+                fontFamily: 'Heebo', fontSize: 12, fontWeight: 600,
+                color: tab === t.key ? 'var(--dark)' : 'var(--gray-500)',
+                borderBottom: tab === t.key ? '2.5px solid var(--dark)' : '2.5px solid transparent',
+                cursor: 'pointer', whiteSpace: 'nowrap',
               }}
             >{t.label}</button>
           ))}
@@ -226,7 +231,7 @@ export default function Squads({ onCreateSquad, requireLogin }) {
           </button>
         </div>
       ) : (
-        filtered.map(s => <SquadCard key={s.id} squad={s} onCreateSquad={onCreateSquad} requireLogin={requireLogin} />)
+        filtered.map(s => <SquadCard key={s.id} squad={s} onCreateSquad={onCreateSquad} requireLogin={requireLogin} onSquadLobby={onSquadLobby} />)
       )}
 
       {/* FAB — ⚡ create squad */}

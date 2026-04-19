@@ -73,27 +73,25 @@ export default function HamburgerMenu({ onClose, onNav }) {
   const isLoggedIn = !!localStorage.getItem('shout_nickname');
 
   function handleLogout() {
-    localStorage.removeItem('shout_nickname');
-    localStorage.removeItem('shout_onboarded');
-    localStorage.removeItem('shout_session');
+    ['shout_nickname','shout_onboarded','shout_session','shout_logged_in','shout_user_id','shout_avatar_color'].forEach(k => localStorage.removeItem(k));
     onClose();
     window.location.reload();
   }
 
   const PERSONAL_ACTIONS = [
-    { icon: '⚡', label: 'מאבקים שיזמתי', bg: '#FEF9E7', action: () => { onNav('squads'); } },
-    { icon: '🤝', label: 'מאבקים שהצטרפתי אליהם', bg: '#EFF6FF', action: () => { onNav('squads'); } },
-    { icon: '📅', label: 'אירועים ביומן (וובינרים)', bg: '#F0FDF4', action: () => {} },
-    { icon: '📣', label: 'הצעקות שלי', bg: '#FFF7ED', action: () => { onNav('profile'); } },
-    { icon: '🏆', label: 'הישגים וניצחונות', bg: '#F5F3FF', action: () => { onNav('profile'); } },
-    { icon: '👥', label: 'הזמן חברים ל-Shout', bg: '#FEF2F2', action: () => setShowShare(true) },
-    { icon: '🔒', label: 'פרטים אישיים מאובטחים', bg: '#F8FAFC', action: () => { onNav('profile'); } },
+    { icon: '⚡', label: 'מאבקים שיזמתי',          bg: '#FEF9E7', action: () => { onNav('squads'); },   active: true },
+    { icon: '🤝', label: 'מאבקים שהצטרפתי אליהם',  bg: '#EFF6FF', action: () => { onNav('squads'); },   active: true },
+    { icon: '📣', label: 'הצעקות שלי',              bg: '#FFF7ED', action: () => { onNav('profile'); },  active: true },
+    { icon: '👥', label: 'הזמן חברים ל-Shout',      bg: '#FEF2F2', action: () => setShowShare(true),     active: true },
+    { icon: '📅', label: 'אירועים ביומן (בקרוב)',   bg: '#F0FDF4', action: null,                          active: false },
+    { icon: '🏆', label: 'הישגים וניצחונות',        bg: '#F5F3FF', action: () => { onNav('profile'); },  active: true },
+    { icon: '🔒', label: 'ארנק הדאטה (בקרוב)',      bg: '#F8FAFC', action: null,                          active: false },
   ];
 
   const INFO = [
-    { icon: '💬', label: 'צור קשר', bg: '#F0FDF4' },
-    { icon: '📋', label: 'תקנון ותנאי שימוש', bg: '#F5F5F5' },
-    { icon: '❓', label: 'אודות Shout', bg: '#F5F5F5' },
+    { icon: '💬', label: 'צור קשר',            bg: '#F0FDF4', active: false },
+    { icon: '📋', label: 'תקנון ותנאי שימוש',  bg: '#F5F5F5', active: false },
+    { icon: '❓', label: 'אודות Shout',         bg: '#F5F5F5', active: false },
   ];
 
   return (
@@ -133,7 +131,9 @@ export default function HamburgerMenu({ onClose, onNav }) {
           <button
             key={i}
             className="drawer-item"
-            onClick={() => { p.action(); onClose(); }}
+            disabled={!p.active}
+            onClick={() => p.active && p.action && (p.action(), onClose())}
+            style={{ opacity: p.active ? 1 : 0.4, cursor: p.active ? 'pointer' : 'not-allowed' }}
           >
             <div className="drawer-item-icon" style={{ background: p.bg }}>{p.icon}</div>
             {p.label}
@@ -151,7 +151,7 @@ export default function HamburgerMenu({ onClose, onNav }) {
         </div>
 
         {INFO.map((item, i) => (
-          <button key={i} className="drawer-item">
+          <button key={i} className="drawer-item" disabled style={{ opacity: 0.4, cursor: 'not-allowed' }}>
             <div className="drawer-item-icon" style={{ background: item.bg }}>{item.icon}</div>
             {item.label}
           </button>

@@ -2,6 +2,8 @@ const express = require('express');
 const { DatabaseSync } = require('node:sqlite');
 const cors = require('cors');
 const path = require('path');
+const https = require('https');
+const crypto = require('crypto');
 
 const app = express();
 const db = new DatabaseSync(path.join(__dirname, 'shout.db'));
@@ -99,6 +101,67 @@ db.exec(`
     squad_id   INTEGER NOT NULL,
     session_id TEXT NOT NULL,
     PRIMARY KEY (squad_id, session_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nickname        TEXT NOT NULL,
+    email           TEXT,
+    social_id       TEXT,
+    social_provider TEXT,
+    avatar_color    TEXT DEFAULT '#F97316',
+    interests       TEXT DEFAULT '{}',
+    session_id      TEXT UNIQUE,
+    created_at      TEXT DEFAULT (datetime('now')),
+    last_login      TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS saved_shouts (
+    user_session TEXT NOT NULL,
+    shout_id     INTEGER NOT NULL,
+    saved_at     TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (user_session, shout_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS reported_shouts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    shout_id   INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    reason     TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS webinar_registrations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    squad_id   INTEGER,
+    nickname   TEXT,
+    email      TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_rooms (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    type       TEXT NOT NULL DEFAULT 'group',
+    name       TEXT,
+    squad_id   INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id    INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    nickname   TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (room_id) REFERENCES chat_rooms(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_room_members (
+    room_id    INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    PRIMARY KEY (room_id, session_id)
   );
 `);
 
@@ -213,7 +276,7 @@ app.get('/api/categories', (req, res) => {
 
 // Shouts
 app.get('/api/shouts', (req, res) => {
-  const { category, company_id, page = 1 } = req.query;
+  const { category, company_id, page = 1, interests } = req.query;
   const limit = 20;
   const offset = (page - 1) * limit;
   const session = req.headers['x-session'] || 'default';
@@ -231,6 +294,10 @@ app.get('/api/shouts', (req, res) => {
   }
   if (company_id) {
     conditions.push(`s.company_id = ${parseInt(company_id, 10)}`);
+  }
+  if (interests) {
+    const slugs = interests.split(',').map(s => `'${s.replace(/'/g, '')}'`).join(',');
+    if (slugs) conditions.push(`cat.slug IN (${slugs})`);
   }
   if (conditions.length) {
     query += ' WHERE ' + conditions.join(' AND ');
@@ -351,6 +418,21 @@ app.post('/api/squads', (req, res) => {
   res.json(db.prepare('SELECT * FROM squads WHERE id=?').get(result.lastInsertRowid));
 });
 
+app.get('/api/squads/:id', (req, res) => {
+  const { id } = req.params;
+  const session = req.headers['x-session'] || 'default';
+  const squad = db.prepare(`
+    SELECT s.*, c.name as company_name, cat.name as category_name
+    FROM squads s
+    LEFT JOIN companies c ON s.company_id = c.id
+    LEFT JOIN categories cat ON s.category_id = cat.id
+    WHERE s.id = ?
+  `).get(id);
+  if (!squad) return res.status(404).json({ error: 'not found' });
+  const joined = !!db.prepare('SELECT 1 FROM squad_joins WHERE squad_id=? AND session_id=?').get(id, session);
+  res.json({ ...squad, joined, progress: Math.round((squad.current_members / squad.target_members) * 100) });
+});
+
 app.post('/api/squads/:id/join', (req, res) => {
   const { id } = req.params;
   const session = req.headers['x-session'] || 'default';
@@ -368,6 +450,21 @@ app.post('/api/squads/:id/join', (req, res) => {
 });
 
 // Companies / Leaderboard
+app.get('/api/companies/:id', (req, res) => {
+  const { id } = req.params;
+  const company = db.prepare(`
+    SELECT co.*, cat.name as category_name, cat.icon as category_icon
+    FROM companies co LEFT JOIN categories cat ON co.category_id = cat.id
+    WHERE co.id = ?
+  `).get(id);
+  if (!company) return res.status(404).json({ error: 'not found' });
+  const shouts = db.prepare(`
+    SELECT sh.* FROM shouts sh WHERE sh.company_id = ? ORDER BY sh.echoes DESC LIMIT 10
+  `).all(id).map(s => ({ ...s, time_ago: timeAgo(s.created_at) }));
+  const squads = db.prepare('SELECT * FROM squads WHERE company_id = ?').all(id);
+  res.json({ ...company, shouts, squads });
+});
+
 app.get('/api/companies', (req, res) => {
   const { category } = req.query;
   let query = `
@@ -403,6 +500,288 @@ app.get('/api/notifications', (req, res) => {
 app.post('/api/notifications/read-all', (req, res) => {
   db.prepare('UPDATE notifications SET is_read=1').run();
   res.json({ ok: true });
+});
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#F97316','#3B82F6','#10B981','#8B5CF6','#EF4444','#F59E0B','#06B6D4','#84CC16'];
+
+app.post('/api/auth/login', (req, res) => {
+  const { nickname } = req.body;
+  const session = req.headers['x-session'] || crypto.randomBytes(16).toString('hex');
+  if (!nickname) return res.status(400).json({ error: 'nickname required' });
+
+  let user = db.prepare('SELECT * FROM users WHERE session_id = ?').get(session);
+  if (!user) {
+    const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+    const result = db.prepare(
+      'INSERT INTO users (nickname, avatar_color, session_id) VALUES (?,?,?)'
+    ).run(nickname, color, session);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+  } else {
+    db.prepare('UPDATE users SET nickname=?, last_login=datetime("now") WHERE session_id=?').run(nickname, session);
+    user = db.prepare('SELECT * FROM users WHERE session_id = ?').get(session);
+  }
+  res.json({ user });
+});
+
+app.post('/api/auth/social', (req, res) => {
+  const { provider, provider_id, name, email } = req.body;
+  const session = req.headers['x-session'] || crypto.randomBytes(16).toString('hex');
+  if (!provider || !name) return res.status(400).json({ error: 'provider and name required' });
+
+  let user = db.prepare('SELECT * FROM users WHERE social_id=? AND social_provider=?').get(provider_id || name, provider);
+  if (!user) {
+    const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+    const result = db.prepare(
+      'INSERT OR REPLACE INTO users (nickname, email, social_id, social_provider, avatar_color, session_id) VALUES (?,?,?,?,?,?)'
+    ).run(name, email || null, provider_id || name, provider, color, session);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+  } else {
+    db.prepare('UPDATE users SET session_id=?, last_login=datetime("now") WHERE id=?').run(session, user.id);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  }
+  res.json({ user });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  const user = db.prepare('SELECT * FROM users WHERE session_id = ?').get(session);
+  if (!user) return res.json({ user: null });
+  res.json({ user });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  db.prepare('UPDATE users SET session_id=NULL WHERE session_id=?').run(session);
+  res.json({ ok: true });
+});
+
+app.put('/api/auth/interests', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  const { interests } = req.body;
+  db.prepare('UPDATE users SET interests=? WHERE session_id=?').run(JSON.stringify(interests || {}), session);
+  res.json({ ok: true });
+});
+
+// Google OAuth
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT = process.env.GOOGLE_REDIRECT || 'http://localhost:3001/api/auth/google/callback';
+const APP_URL = process.env.APP_URL || 'http://localhost:5178';
+
+app.get('/api/auth/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(501).json({ error: 'Google OAuth not configured. Set GOOGLE_CLIENT_ID env var.' });
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(GOOGLE_REDIRECT)}&response_type=code&scope=openid%20email%20profile&state=${req.headers['x-session'] || ''}`;
+  res.redirect(url);
+});
+
+app.get('/api/auth/google/callback', (req, res) => {
+  const { code, state: session } = req.query;
+  if (!code || !GOOGLE_CLIENT_ID) return res.redirect(`${APP_URL}?auth_error=1`);
+
+  const postData = new URLSearchParams({
+    code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+    redirect_uri: GOOGLE_REDIRECT, grant_type: 'authorization_code',
+  }).toString();
+
+  const tokenReq = https.request({
+    hostname: 'oauth2.googleapis.com', path: '/token', method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(postData) },
+  }, tokenRes => {
+    let data = '';
+    tokenRes.on('data', d => data += d);
+    tokenRes.on('end', () => {
+      try {
+        const { access_token } = JSON.parse(data);
+        https.get(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${access_token}`, infoRes => {
+          let info = '';
+          infoRes.on('data', d => info += d);
+          infoRes.on('end', () => {
+            const profile = JSON.parse(info);
+            let user = db.prepare('SELECT * FROM users WHERE social_id=? AND social_provider=?').get(profile.id, 'google');
+            const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+            if (!user) {
+              const r = db.prepare('INSERT OR REPLACE INTO users (nickname,email,social_id,social_provider,avatar_color,session_id) VALUES (?,?,?,?,?,?)').run(profile.name, profile.email, profile.id, 'google', color, session);
+              user = db.prepare('SELECT * FROM users WHERE id=?').get(r.lastInsertRowid);
+            } else {
+              db.prepare('UPDATE users SET session_id=?, last_login=datetime("now") WHERE id=?').run(session, user.id);
+            }
+            res.redirect(`${APP_URL}?auth_ok=1&nickname=${encodeURIComponent(profile.name)}`);
+          });
+        });
+      } catch { res.redirect(`${APP_URL}?auth_error=1`); }
+    });
+  });
+  tokenReq.write(postData);
+  tokenReq.end();
+});
+
+// ── Save / Report Shout ───────────────────────────────────────────────────────
+app.post('/api/shouts/:id/save', (req, res) => {
+  const { id } = req.params;
+  const session = req.headers['x-session'] || 'default';
+  const existing = db.prepare('SELECT 1 FROM saved_shouts WHERE user_session=? AND shout_id=?').get(session, id);
+  if (existing) {
+    db.prepare('DELETE FROM saved_shouts WHERE user_session=? AND shout_id=?').run(session, id);
+    return res.json({ saved: false });
+  }
+  db.prepare('INSERT INTO saved_shouts (user_session, shout_id) VALUES (?,?)').run(session, id);
+  res.json({ saved: true });
+});
+
+app.get('/api/saved-shouts', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  const rows = db.prepare(`
+    SELECT s.*, c.name as company_name, cat.name as category_name
+    FROM shouts s
+    JOIN saved_shouts ss ON ss.shout_id = s.id
+    LEFT JOIN companies c ON s.company_id = c.id
+    LEFT JOIN categories cat ON s.category_id = cat.id
+    WHERE ss.user_session = ?
+    ORDER BY ss.saved_at DESC
+  `).all(session);
+  res.json(rows.map(r => ({ ...r, time_ago: timeAgo(r.created_at), echoed: false, boosted: false, responses: [] })));
+});
+
+app.post('/api/shouts/:id/report', (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  const existing = db.prepare('SELECT 1 FROM reported_shouts WHERE shout_id=? AND session_id=?').get(id, session);
+  if (existing) return res.json({ ok: true, already: true });
+  db.prepare('INSERT INTO reported_shouts (shout_id, session_id, reason) VALUES (?,?,?)').run(id, session, reason || 'general');
+  res.json({ ok: true });
+});
+
+// ── Webinar Registration ──────────────────────────────────────────────────────
+app.post('/api/webinars/register', (req, res) => {
+  const { squad_id, email, nickname } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  const existing = db.prepare('SELECT 1 FROM webinar_registrations WHERE session_id=? AND squad_id=?').get(session, squad_id || null);
+  if (existing) return res.json({ ok: true, already: true });
+  db.prepare('INSERT INTO webinar_registrations (session_id, squad_id, email, nickname) VALUES (?,?,?,?)').run(session, squad_id || null, email || null, nickname || null);
+  res.json({ ok: true });
+});
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+function ensureGroupRoom(squadId) {
+  let room = db.prepare('SELECT * FROM chat_rooms WHERE type=? AND squad_id=?').get('group', squadId);
+  if (!room) {
+    const squad = db.prepare('SELECT name FROM squads WHERE id=?').get(squadId);
+    const r = db.prepare('INSERT INTO chat_rooms (type, name, squad_id) VALUES (?,?,?)').run('group', squad?.name || 'קבוצה', squadId);
+    room = db.prepare('SELECT * FROM chat_rooms WHERE id=?').get(r.lastInsertRowid);
+  }
+  return room;
+}
+
+app.get('/api/chat/rooms', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+
+  // Group rooms: squads the user joined
+  const joinedSquads = db.prepare('SELECT squad_id FROM squad_joins WHERE session_id=?').all(session);
+  const groupRooms = joinedSquads.map(({ squad_id }) => {
+    const room = ensureGroupRoom(squad_id);
+    const last = db.prepare('SELECT * FROM chat_messages WHERE room_id=? ORDER BY created_at DESC LIMIT 1').get(room.id);
+    const count = db.prepare('SELECT COUNT(*) as c FROM chat_messages WHERE room_id=?').get(room.id).c;
+    return { ...room, last_message: last ? { content: last.content, nickname: last.nickname, time: timeAgo(last.created_at) } : null, message_count: count };
+  });
+
+  // Direct rooms
+  const directRooms = db.prepare(`
+    SELECT cr.*, cm.content as last_content, cm.nickname as last_nick, cm.created_at as last_at
+    FROM chat_rooms cr
+    JOIN chat_room_members crm ON crm.room_id = cr.id AND crm.session_id = ?
+    LEFT JOIN chat_messages cm ON cm.id = (SELECT id FROM chat_messages WHERE room_id=cr.id ORDER BY created_at DESC LIMIT 1)
+    WHERE cr.type = 'direct'
+  `).all(session);
+
+  res.json({ group: groupRooms, direct: directRooms });
+});
+
+app.get('/api/chat/rooms/:id/messages', (req, res) => {
+  const { id } = req.params;
+  const messages = db.prepare('SELECT * FROM chat_messages WHERE room_id=? ORDER BY created_at ASC LIMIT 100').all(id);
+  res.json(messages.map(m => ({ ...m, time_ago: timeAgo(m.created_at) })));
+});
+
+app.post('/api/chat/rooms/:id/messages', (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  const user = db.prepare('SELECT * FROM users WHERE session_id=?').get(session);
+  const nickname = user?.nickname || 'אנונימי';
+  if (!content?.trim()) return res.status(400).json({ error: 'content required' });
+  const r = db.prepare('INSERT INTO chat_messages (room_id, session_id, nickname, content) VALUES (?,?,?,?)').run(id, session, nickname, content.trim());
+  const msg = db.prepare('SELECT * FROM chat_messages WHERE id=?').get(r.lastInsertRowid);
+  res.json({ ...msg, time_ago: 'עכשיו' });
+});
+
+app.post('/api/chat/direct', (req, res) => {
+  const { target_session, target_nickname } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  if (session === target_session) return res.status(400).json({ error: 'cannot chat with yourself' });
+
+  // Find existing direct room with both members
+  const existingRooms = db.prepare(`
+    SELECT room_id FROM chat_room_members WHERE session_id=?
+  `).all(session);
+
+  for (const { room_id } of existingRooms) {
+    const room = db.prepare('SELECT * FROM chat_rooms WHERE id=? AND type=?').get(room_id, 'direct');
+    if (!room) continue;
+    const other = db.prepare('SELECT 1 FROM chat_room_members WHERE room_id=? AND session_id=?').get(room_id, target_session);
+    if (other) return res.json({ room });
+  }
+
+  // Create new direct room
+  const me = db.prepare('SELECT * FROM users WHERE session_id=?').get(session);
+  const roomName = `${me?.nickname || 'אנונימי'} & ${target_nickname}`;
+  const r = db.prepare('INSERT INTO chat_rooms (type, name) VALUES (?,?)').run('direct', roomName);
+  const room = db.prepare('SELECT * FROM chat_rooms WHERE id=?').get(r.lastInsertRowid);
+  db.prepare('INSERT OR IGNORE INTO chat_room_members (room_id, session_id) VALUES (?,?)').run(room.id, session);
+  db.prepare('INSERT OR IGNORE INTO chat_room_members (room_id, session_id) VALUES (?,?)').run(room.id, target_session);
+  res.json({ room });
+});
+
+app.get('/api/chat/squad/:squad_id', (req, res) => {
+  const room = ensureGroupRoom(req.params.squad_id);
+  res.json({ room });
+});
+
+// ── Global Search ─────────────────────────────────────────────────────────────
+app.get('/api/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json({ shouts: [], companies: [], squads: [], users: [] });
+  const like = `%${q}%`;
+
+  const shouts = db.prepare(`
+    SELECT s.*, c.name as company_name FROM shouts s
+    LEFT JOIN companies c ON s.company_id = c.id
+    WHERE s.content LIKE ? OR c.name LIKE ?
+    ORDER BY s.echoes DESC LIMIT 10
+  `).all(like, like).map(r => ({ ...r, time_ago: timeAgo(r.created_at) }));
+
+  const companies = db.prepare(`
+    SELECT co.*, cat.name as category_name FROM companies co
+    LEFT JOIN categories cat ON co.category_id = cat.id
+    WHERE co.name LIKE ?
+    ORDER BY co.anger_score DESC LIMIT 8
+  `).all(like);
+
+  const squads = db.prepare(`
+    SELECT s.*, c.name as company_name FROM squads s
+    LEFT JOIN companies c ON s.company_id = c.id
+    WHERE s.name LIKE ? OR s.goal_description LIKE ?
+    ORDER BY s.current_members DESC LIMIT 8
+  `).all(like, like);
+
+  const users = db.prepare(`
+    SELECT id, nickname, avatar_color FROM users
+    WHERE nickname LIKE ?
+    LIMIT 8
+  `).all(like);
+
+  res.json({ shouts, companies, squads, users });
 });
 
 // ── Static (production) ──────────────────────────────────────────────────────

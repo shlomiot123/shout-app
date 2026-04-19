@@ -42,12 +42,17 @@ export default function Feed({ onCreateShout, onNav, onOpenCreateSquad, requireL
   const fetchShouts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await API.get(`/api/shouts?category=${selectedCat}`);
+      let url = `/api/shouts?category=${selectedCat}`;
+      if (feedMode === 'mine' && Object.keys(interests).length > 0) {
+        const slugs = Object.keys(interests).filter(k => interests[k]).join(',');
+        if (slugs) url += `&interests=${slugs}`;
+      }
+      const data = await API.get(url);
       setShouts(data);
     } finally {
       setLoading(false);
     }
-  }, [selectedCat]);
+  }, [selectedCat, feedMode, interests]);
 
   useEffect(() => {
     API.get('/api/categories').then(setCategories);

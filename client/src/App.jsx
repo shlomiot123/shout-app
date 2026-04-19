@@ -8,11 +8,14 @@ import Landing from './screens/Landing.jsx';
 import Onboarding from './screens/Onboarding.jsx';
 import Feed from './screens/Feed.jsx';
 import Squads from './screens/Squads.jsx';
-import Leaderboard from './screens/Leaderboard.jsx';
 import Companies from './screens/Companies.jsx';
 import Notifications from './screens/Notifications.jsx';
 import CorporatePortal from './screens/CorporatePortal.jsx';
 import Profile from './screens/Profile.jsx';
+import Arena from './screens/Arena.jsx';
+import Friends from './screens/Friends.jsx';
+import SquadLobby from './screens/SquadLobby.jsx';
+import CompanyLobby from './screens/CompanyLobby.jsx';
 import SearchOverlay from './components/SearchOverlay.jsx';
 
 // Persistent session id
@@ -32,10 +35,11 @@ export const API = {
 };
 
 export default function App() {
+  const isLoggedIn_ = !!localStorage.getItem('shout_logged_in');
   const onboarded = !!localStorage.getItem('shout_onboarded');
 
-  // landing | onboarding | corporate | feed | squads | leaderboard | companies | notifications | profile
-  const [screen, setScreen] = useState(onboarded ? 'landing' : 'onboarding');
+  const startScreen = isLoggedIn_ ? 'feed' : onboarded ? 'landing' : 'onboarding';
+  const [screen, setScreen] = useState(startScreen);
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateSquad, setShowCreateSquad] = useState(false);
   const [createSquadShout, setCreateSquadShout] = useState(null);
@@ -45,9 +49,16 @@ export default function App() {
   const [feedKey, setFeedKey] = useState(0);
   const [companiesFilter, setCompaniesFilter] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [squadLobbyId, setSquadLobbyId] = useState(null);
+  const [companyLobbyId, setCompanyLobbyId] = useState(null);
 
-  function isLoggedIn() { return !!localStorage.getItem('shout_nickname'); }
+  function isLoggedIn() { return !!localStorage.getItem('shout_logged_in'); }
   function requireLogin(action) { if (isLoggedIn()) action(); else setShowLogin(true); }
+  function handleLogout() {
+    API.post('/api/auth/logout', {});
+    ['shout_logged_in','shout_nickname','shout_user_id','shout_avatar_color'].forEach(k => localStorage.removeItem(k));
+    setScreen('landing');
+  }
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -63,6 +74,8 @@ export default function App() {
   }, [fetchUnread]);
 
   function navigate(s, filter) {
+    if (s === 'squad-lobby' && filter) { setSquadLobbyId(filter); setScreen('squad-lobby'); return; }
+    if (s === 'company-lobby' && filter) { setCompanyLobbyId(filter); setScreen('company-lobby'); return; }
     setScreen(s);
     if (s === 'notifications') fetchUnread();
     if (s === 'companies' && filter) setCompaniesFilter(filter);
@@ -88,7 +101,7 @@ export default function App() {
     });
   }
 
-  const isApp = !['landing', 'onboarding', 'corporate', 'profile'].includes(screen);
+  const isApp = !['landing', 'onboarding', 'corporate', 'profile', 'squad-lobby', 'company-lobby'].includes(screen);
 
   // Full-screen non-nav screens
   if (screen === 'onboarding') {
@@ -110,7 +123,33 @@ export default function App() {
   if (screen === 'profile') {
     return (
       <div className="app-shell" style={{ overflowY: 'auto' }}>
-        <Profile onClose={() => navigate('feed')} onNav={navigate} />
+        <Profile onClose={() => navigate('feed')} onNav={navigate} onLogout={handleLogout} />
+      </div>
+    );
+  }
+
+  if (screen === 'squad-lobby') {
+    return (
+      <div className="app-shell" style={{ overflowY: 'auto' }}>
+        <SquadLobby
+          squadId={squadLobbyId}
+          onBack={() => navigate('squads')}
+          onCreateShout={() => { setShowCreate(true); }}
+          requireLogin={requireLogin}
+        />
+      </div>
+    );
+  }
+
+  if (screen === 'company-lobby') {
+    return (
+      <div className="app-shell" style={{ overflowY: 'auto' }}>
+        <CompanyLobby
+          companyId={companyLobbyId}
+          onBack={() => navigate('companies')}
+          onCreateShout={() => { setShowCreate(true); }}
+          requireLogin={requireLogin}
+        />
       </div>
     );
   }
@@ -130,9 +169,10 @@ export default function App() {
       <div className="screen-content">
         {screen === 'landing'      && <Landing onEnter={() => navigate('feed')} onCorporate={() => navigate('corporate')} />}
         {screen === 'feed'         && <Feed key={feedKey} onCreateShout={() => requireLogin(() => setShowCreate(true))} onNav={navigate} onOpenCreateSquad={openCreateSquad} requireLogin={requireLogin} />}
-        {screen === 'squads'       && <Squads onCreateShout={() => requireLogin(() => setShowCreate(true))} onCreateSquad={openCreateSquad} requireLogin={requireLogin} />}
-        {screen === 'leaderboard'  && <Leaderboard onCompanies={() => navigate('companies')} />}
-        {screen === 'companies'    && <Companies onCreateShout={() => setShowCreate(true)} initialFilter={companiesFilter} />}
+        {screen === 'squads'    && <Squads onCreateShout={() => requireLogin(() => setShowCreate(true))} onCreateSquad={openCreateSquad} requireLogin={requireLogin} onSquadLobby={(id) => navigate('squad-lobby', id)} />}
+        {screen === 'companies' && <Companies onCreateShout={() => setShowCreate(true)} initialFilter={companiesFilter} onCompanyLobby={(id) => navigate('company-lobby', id)} />}
+        {screen === 'arena'     && <Arena />}
+        {screen === 'friends'   && <Friends requireLogin={requireLogin} />}
         {screen === 'notifications' && <Notifications />}
       </div>
 
@@ -165,13 +205,17 @@ export default function App() {
       )}
 
       {showSearch && (
-        <SearchOverlay onClose={() => setShowSearch(false)} onNav={navigate} />
+        <SearchOverlay onClose={() => setShowSearch(false)} onNav={(s, id) => { setShowSearch(false); navigate(s, id); }} />
       )}
 
       {showLogin && (
         <LoginModal
           onClose={() => setShowLogin(false)}
-          onLoggedIn={() => { setShowLogin(false); setFeedKey(k => k + 1); }}
+          onLoggedIn={(user) => {
+            setShowLogin(false);
+            localStorage.setItem('shout_onboarded', '1');
+            setFeedKey(k => k + 1);
+          }}
         />
       )}
     </div>
