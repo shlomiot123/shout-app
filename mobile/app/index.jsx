@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C } from '../constants/theme';
 
 const FEATURES = [
@@ -53,7 +54,10 @@ export default function Landing() {
     Animated.sequence([
       Animated.timing(ctaScale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
       Animated.timing(ctaScale, { toValue: 1,    duration: 80, useNativeDriver: true }),
-    ]).start(() => router.replace('/(tabs)/feed'));
+    ]).start(async () => {
+      const welcomed = await AsyncStorage.getItem('shout_welcomed');
+      router.replace(welcomed ? '/(tabs)/feed' : '/welcome');
+    });
   }
 
   return (
@@ -90,26 +94,21 @@ export default function Landing() {
           </Text>
         </Animated.View>
 
-        {/* Feature cards */}
-        {FEATURES.map((f, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
-          >
-            <View style={styles.featureCard}>
-              <View style={styles.featureIcon}>
-                <Text style={{ fontSize: 24 }}>{f.icon}</Text>
-              </View>
-              <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureSub}>{f.sub}</Text>
-              </View>
+        {/* Feature pills */}
+        <Animated.View
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+            width: '100%', gap: 10, marginBottom: 24,
+          }}
+        >
+          {FEATURES.map((f, i) => (
+            <View key={i} style={styles.featurePill}>
+              <Text style={{ fontSize: 20 }}>{f.icon}</Text>
+              <Text style={styles.featurePillText}>{f.title}</Text>
             </View>
-          </Animated.View>
-        ))}
+          ))}
+        </Animated.View>
 
         {/* CTA */}
         <Animated.View style={{ transform: [{ scale: ctaScale }], marginTop: 8 }}>
@@ -162,29 +161,18 @@ const styles = StyleSheet.create({
   headlineAccent: { color: C.yellow },
   sub: {
     fontSize: 15, color: C.gray500, textAlign: 'center',
-    lineHeight: 22, marginBottom: 28,
+    lineHeight: 22, marginBottom: 20,
   },
 
-  featureCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.gray50,
-    borderWidth: 1.5, borderColor: C.gray200,
-    borderRadius: 16, padding: 14,
-    marginBottom: 10, width: '100%',
-  },
-  featureIcon: {
-    width: 48, height: 48, borderRadius: 12,
+  featurePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: C.yellow,
-    justifyContent: 'center', alignItems: 'center',
-    flexShrink: 0,
+    borderRadius: 50, paddingVertical: 12, paddingHorizontal: 18,
+    width: '100%',
   },
-  featureText: { flex: 1, alignItems: 'flex-end' },
-  featureTitle: {
-    fontSize: 13.5, fontWeight: '700', color: C.dark,
-    textAlign: 'right', marginBottom: 3,
-  },
-  featureSub: {
-    fontSize: 12, color: C.gray500, textAlign: 'right', lineHeight: 17,
+  featurePillText: {
+    fontSize: 14, fontWeight: '700', color: C.black,
+    textAlign: 'right', flex: 1,
   },
 
   cta: {

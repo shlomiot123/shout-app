@@ -2,6 +2,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
+import { router } from 'expo-router';
 import * as Haptics from '../utils/haptics';
 import { C, shadow, AVATAR_COLORS } from '../constants/theme';
 import { api } from '../utils/api';
@@ -111,22 +112,25 @@ export default function SquadCard({ squad: initial }) {
           </Text>
         </View>
 
-        {/* Join button */}
-        {squad.is_success ? (
-          <View style={styles.successMsg}>
-            <Text style={styles.successMsgText}>✅ הקבוצה השיגה את מטרתה!</Text>
-          </View>
-        ) : (
+        {/* Action buttons */}
+        <View style={styles.btnRow}>
           <TouchableOpacity
             style={[styles.joinBtn, squad.joined && styles.joinBtnActive]}
             onPress={handleJoin}
             activeOpacity={0.85}
           >
-            <Text style={[styles.joinBtnText, squad.joined && { color: C.black }]}>
-              {squad.joined ? '✓ עמד בקבוצת הלחץ' : 'היכנס לעמוד קבוצת הלחץ'}
+            <Text style={[styles.joinBtnText, squad.joined && { color: C.dark }]}>
+              {squad.joined ? '✓ הצטרפתי' : '+ הצטרף'}
             </Text>
           </TouchableOpacity>
-        )}
+          <TouchableOpacity
+            style={styles.lobbyBtn}
+            onPress={() => router.push({ pathname: '/squad-lobby', params: { id: squad.id } })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.lobbyBtnText}>כנס ללובי ›</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -196,7 +200,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12, alignItems: 'center',
   },
   joinBtnActive: { backgroundColor: C.yellow, borderColor: C.yellow },
-  joinBtnText: { fontSize: 14, fontWeight: '700', color: C.dark },
+  joinBtnText: { fontSize: 13, fontWeight: '700', color: C.dark },
+
+  btnRow: { flexDirection: 'row', gap: 8 },
+  lobbyBtn: {
+    flex: 1, borderRadius: 12, borderWidth: 1.5, borderColor: C.dark,
+    paddingVertical: 10, alignItems: 'center',
+  },
+  lobbyBtnText: { fontSize: 13, fontWeight: '700', color: C.dark },
 
   successMsg: {
     backgroundColor: C.greenLight, borderRadius: 12, paddingVertical: 12, alignItems: 'center',

@@ -1,10 +1,12 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
 
 export default function RootLayout() {
   return (
+    <SafeAreaProvider>
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="dark" backgroundColor="#F5C000" />
       <Stack>
@@ -22,17 +24,27 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="create"
-          options={{
-            presentation: 'modal',
-            title: 'יצירת צעקה',
-            headerStyle: { backgroundColor: '#fff' },
-            headerTintColor: '#0D0D0D',
-            headerTitleStyle: { fontWeight: '800', fontSize: 17 },
-            headerBackTitle: 'ביטול',
-          }}
+          options={{ presentation: 'modal', headerShown: false }}
+        />
+        <Stack.Screen
+          name="squad-lobby"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="company-lobby"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="profile"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="welcome"
+          options={{ headerShown: false }}
         />
       </Stack>
     </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 

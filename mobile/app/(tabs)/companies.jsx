@@ -3,6 +3,7 @@ import {
   StyleSheet, RefreshControl, Animated,
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
+import { router } from 'expo-router';
 import { C, shadow } from '../../constants/theme';
 import { api } from '../../utils/api';
 
@@ -93,9 +94,16 @@ function CompanyCard({ company }) {
             <View style={[styles.angerBarFill, { width: `${company.anger_score}%`, backgroundColor: angerColor }]} />
           </View>
 
-          <TouchableOpacity style={styles.shoutAtBtn} activeOpacity={0.85}>
-            <Text style={styles.shoutAtBtnText}>📣 צעק על {company.name}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={[styles.shoutAtBtn, { flex: 1 }]} activeOpacity={0.85}
+              onPress={() => router.push({ pathname: '/company-lobby', params: { id: company.id } })}>
+              <Text style={styles.shoutAtBtnText}>לובי החברה ›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.shoutAtBtn, { flex: 1, backgroundColor: C.black }]} activeOpacity={0.85}
+              onPress={() => router.push({ pathname: '/create', params: { company_id: company.id, company_name: company.name } })}>
+              <Text style={[styles.shoutAtBtnText, { color: C.yellow }]}>📣 צעק</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>

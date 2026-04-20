@@ -1,9 +1,8 @@
 import { Platform } from 'react-native';
 
-// iOS Simulator → localhost, Android Emulator → 10.0.2.2
-// Physical device → replace with your Mac's local IP (e.g. 192.168.1.x)
 export const BASE_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001';
+  process.env.EXPO_PUBLIC_API_URL ||
+  (Platform.OS === 'android' ? 'http://10.0.2.2:3001' : 'http://localhost:3001');
 
 // Ephemeral session (resets on app restart; fine for MVP)
 export const SESSION = Math.random().toString(36).slice(2) + Date.now().toString(36);

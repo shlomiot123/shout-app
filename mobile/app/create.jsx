@@ -1,51 +1,98 @@
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
-  Animated,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, KeyboardAvoidingView, Platform, Animated, Modal, Pressable,
 } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from '../utils/haptics';
-import { C, shadow } from '../constants/theme';
+import { C } from '../constants/theme';
 import { api } from '../utils/api';
 
-const ANGER_LEVELS = [
-  { level: 1, emoji: '😤', label: 'קצת עצבני' },
-  { level: 2, emoji: '😠', label: 'עצבני' },
-  { level: 3, emoji: '😡', label: 'מאוד עצבני' },
-  { level: 4, emoji: '🤬', label: 'כועס מאוד' },
-  { level: 5, emoji: '💢', label: 'נפיצה!' },
+// 4 steps matching design: category, content, radius, churn→submit
+const TOTAL_STEPS = 4;
+
+const CHURN_OPTIONS = [
+  { label: 'כן, מיידית', value: 'immediate' },
+  { label: 'בהתלבטות', value: 'considering' },
+  { label: 'אין אלטרנטיבה', value: 'no_alternative' },
+  { label: 'לא רלוונטי', value: 'na' },
 ];
 
-const STEPS = ['כתיבה', 'קטגוריה', 'חברה'];
+const RADIUS_OPTIONS = ['אישי', 'משפחתי', 'קהילה / שכונה', 'יישוב / עיר', 'ארצי'];
 
-function StepIndicator({ step }) {
+/* RTL progress dots: step 0 = rightmost dot active, step 3 = leftmost */
+function StepDots({ step }) {
   return (
-    <View style={styles.stepRow}>
-      {STEPS.map((label, i) => (
-        <View key={i} style={styles.stepItem}>
-          <View style={[styles.stepCircle, i <= step && styles.stepCircleActive]}>
-            <Text style={[styles.stepNum, i <= step && styles.stepNumActive]}>
-              {i < step ? '✓' : i + 1}
-            </Text>
-          </View>
-          <Text style={[styles.stepLabel, i === step && styles.stepLabelActive]}>{label}</Text>
-        </View>
-      ))}
+    <View style={styles.dots}>
+      {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+        const activeIndex = TOTAL_STEPS - 1 - step;
+        return (
+          <View
+            key={i}
+            style={[styles.dot, i === activeIndex && styles.dotActive]}
+          />
+        );
+      })}
     </View>
   );
 }
 
+/* Company picker dropdown — modal with radio list */
+function CompanyPicker({ companies, selected, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const selectedCo = companies.find(c => c.id === selected);
+
+  return (
+    <>
+      <TouchableOpacity style={styles.pickerTrigger} onPress={() => setOpen(true)} activeOpacity={0.8}>
+        <Text style={styles.pickerChevron}>›</Text>
+        <Text style={[styles.pickerText, !selected && styles.pickerPlaceholder]}>
+          {selectedCo ? selectedCo.name : '-- בחר חברה --'}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal transparent visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setOpen(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerSheetTitle}>בחר חברה</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {companies.map(co => (
+                <TouchableOpacity
+                  key={co.id}
+                  style={styles.pickerOption}
+                  onPress={() => { onSelect(co.id); setOpen(false); }}
+                >
+                  <View style={[styles.radioCircle, selected === co.id && styles.radioCircleActive]}>
+                    {selected === co.id && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={[
+                    styles.pickerOptionText,
+                    selected === co.id && { fontWeight: '700', color: C.dark },
+                  ]}>
+                    {co.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 export default function CreateScreen() {
+  const params = useLocalSearchParams();
   const [step, setStep] = useState(0);
-  const [content, setContent] = useState('');
-  const [angerLevel, setAngerLevel] = useState(3);
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
-  const [selectedCat, setSelectedCat] = useState(null);
-  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedCat, setSelectedCat] = useState(params.category_id ? Number(params.category_id) : null);
+  const [selectedCompany, setSelectedCompany] = useState(params.company_id ? Number(params.company_id) : null);
+  const [content, setContent] = useState('');
+  const [radius, setRadius] = useState(null);
+  const [churn, setChurn] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
+  const [aiLoading, setAiLoading] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -54,7 +101,9 @@ export default function CreateScreen() {
 
   useEffect(() => {
     if (selectedCat) {
-      api.get(`/api/companies?category=${selectedCat}`).then(setCompanies).catch(() => {});
+      api.get(`/api/companies?category_id=${selectedCat}`).then(setCompanies).catch(() => {});
+    } else {
+      setCompanies([]);
     }
   }, [selectedCat]);
 
@@ -62,34 +111,42 @@ export default function CreateScreen() {
     Animated.sequence([
       Animated.timing(shakeAnim, { toValue: 8,  duration: 60, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 5,  duration: 60, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0,  duration: 60, useNativeDriver: true }),
     ]).start();
   }
 
-  function next() {
-    if (step === 0 && content.trim().length < 10) {
+  async function handleNext() {
+    if (step === 1 && content.trim().length < 10) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       shake();
       return;
     }
+    if (step === 2) {
+      // Simulate AI filtering
+      setAiLoading(true);
+      await new Promise(r => setTimeout(r, 1100));
+      setAiLoading(false);
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setStep((s) => s + 1);
+    setStep(s => s + 1);
   }
 
-  function back() {
+  function handleBack() {
     if (step === 0) { router.back(); return; }
-    setStep((s) => s - 1);
+    setStep(s => s - 1);
   }
 
-  async function submit() {
+  async function handleSubmit() {
+    if (!churn) return;
     setSubmitting(true);
     try {
       await api.post('/api/shouts', {
         content,
-        anger_level: angerLevel,
+        anger_level: 3,
         category_id: selectedCat,
         company_id: selectedCompany,
+        radius,
+        churn_intent: churn,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)/feed');
@@ -99,7 +156,14 @@ export default function CreateScreen() {
     setSubmitting(false);
   }
 
-  const selectedAnger = ANGER_LEVELS.find((a) => a.level === angerLevel);
+  const selectedCompanyName = companies.find(c => c.id === selectedCompany)?.name || 'החברה';
+
+  const canNext = [
+    true,                          // 0: category optional
+    content.trim().length >= 10,   // 1: content required
+    !!radius,                      // 2: radius required
+    !!churn,                       // 3: churn required
+  ][step] ?? false;
 
   return (
     <KeyboardAvoidingView
@@ -108,14 +172,14 @@ export default function CreateScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={back} style={styles.backBtn}>
-          <Text style={styles.backText}>{step === 0 ? '✕' : '‹'}</Text>
+        <TouchableOpacity onPress={handleBack} style={styles.closeBtn}>
+          <Text style={styles.closeBtnText}>{step === 0 ? '✕' : '‹'}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>צעקה חדשה</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>יצירת צעקה</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      <StepIndicator step={step} />
+      <StepDots step={step} />
 
       <ScrollView
         style={styles.scroll}
@@ -123,64 +187,20 @@ export default function CreateScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Step 0: Write */}
+        {/* ─── Step 0: Category + Company ─── */}
         {step === 0 && (
-          <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-            <Text style={styles.stepTitle}>מה קרה לך?</Text>
-            <Text style={styles.stepSub}>ספר לנו מה הרגיז אותך. כמה שיותר פרטים — כך הצעקה יותר אפקטיבית.</Text>
-
-            <TextInput
-              style={styles.textArea}
-              multiline
-              numberOfLines={6}
-              placeholder="שפוך את הזעם שלך כאן... תאר מה קרה, מתי, ואיזה נזק נגרם לך."
-              placeholderTextColor={C.gray400}
-              textAlign="right"
-              textAlignVertical="top"
-              value={content}
-              onChangeText={setContent}
-              maxLength={1000}
-            />
-            <Text style={styles.charCount}>{content.length}/1000</Text>
-
-            <Text style={styles.sectionTitle}>רמת הזעם שלך</Text>
-            <View style={styles.angerRow}>
-              {ANGER_LEVELS.map((a) => (
-                <TouchableOpacity
-                  key={a.level}
-                  style={[styles.angerBtn, angerLevel === a.level && styles.angerBtnActive]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setAngerLevel(a.level);
-                  }}
-                >
-                  <Text style={{ fontSize: 28 }}>{a.emoji}</Text>
-                  <Text style={[styles.angerLabel, angerLevel === a.level && styles.angerLabelActive]}>
-                    {a.level}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {selectedAnger && (
-              <Text style={styles.angerDesc}>{selectedAnger.emoji} {selectedAnger.label}</Text>
-            )}
-          </Animated.View>
-        )}
-
-        {/* Step 1: Category */}
-        {step === 1 && (
           <View>
-            <Text style={styles.stepTitle}>באיזה תחום?</Text>
-            <Text style={styles.stepSub}>בחר את הקטגוריה הרלוונטית לצעקה שלך.</Text>
+            <Text style={styles.stepTitle}>באיזה תחום מדובר?</Text>
 
             <View style={styles.catGrid}>
-              {categories.map((cat) => (
+              {categories.filter(c => c.slug !== 'all').map(cat => (
                 <TouchableOpacity
                   key={cat.id}
                   style={[styles.catCard, selectedCat === cat.id && styles.catCardActive]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setSelectedCat(cat.id);
+                    setSelectedCompany(null);
                   }}
                 >
                   <Text style={{ fontSize: 28 }}>{cat.icon}</Text>
@@ -190,70 +210,148 @@ export default function CreateScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {selectedCat && (
+              <View style={styles.companySection}>
+                <Text style={styles.sectionLabel}>לבחירת חברה מהרשימה</Text>
+                <CompanyPicker
+                  companies={companies}
+                  selected={selectedCompany}
+                  onSelect={(id) => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedCompany(id);
+                  }}
+                />
+              </View>
+            )}
           </View>
         )}
 
-        {/* Step 2: Company */}
+        {/* ─── Step 1: Content + Proof ─── */}
+        {step === 1 && (
+          <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+            <Text style={styles.stepTitle}>
+              {`מה הסיבה להפעלת הלחץ מול ${selectedCompanyName}?`}
+            </Text>
+
+            <TextInput
+              style={styles.textArea}
+              multiline
+              numberOfLines={6}
+              placeholder="תאר מה קרה, מתי ואיזה נזק נגרם לך..."
+              placeholderTextColor={C.gray500}
+              textAlign="right"
+              textAlignVertical="top"
+              value={content}
+              onChangeText={t => setContent(t.slice(0, 200))}
+              maxLength={200}
+            />
+            <Text style={styles.charCount}>{content.length}/200</Text>
+
+            <TouchableOpacity style={styles.proofBtn}>
+              <Text style={styles.proofBtnText}>צרף הוכחה</Text>
+              <Text style={{ fontSize: 18 }}>🖼</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* ─── Step 2: Impact Radius ─── */}
         {step === 2 && (
           <View>
-            <Text style={styles.stepTitle}>על מי אתה צועק?</Text>
-            <Text style={styles.stepSub}>בחר את החברה — או דלג אם לא רלוונטי.</Text>
+            <Text style={styles.stepTitle}>מהו מעגל ההשפעה של העוולה?</Text>
+            <Text style={styles.stepSub}>באיזה היקף הנזק הצרכני משפיע?</Text>
 
-            <View style={styles.companyList}>
-              {companies.map((co) => (
-                <TouchableOpacity
-                  key={co.id}
-                  style={[styles.coItem, selectedCompany === co.id && styles.coItemActive]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedCompany(co.id);
-                  }}
-                >
-                  <View style={[styles.coIcon, selectedCompany === co.id && styles.coIconActive]}>
-                    <Text style={{ fontSize: 20 }}>🏢</Text>
-                  </View>
-                  <Text style={[styles.coName, selectedCompany === co.id && { color: C.black, fontWeight: '800' }]}>
-                    {co.name}
-                  </Text>
-                  {selectedCompany === co.id && (
-                    <Text style={{ color: C.black, fontWeight: '700' }}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+            {RADIUS_OPTIONS.map(r => (
+              <TouchableOpacity
+                key={r}
+                style={[styles.radioItem, radius === r && styles.radioItemActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setRadius(r);
+                }}
+              >
+                <View style={[styles.radioCircle, radius === r && styles.radioCircleActive]}>
+                  {radius === r && <View style={styles.radioInner} />}
+                </View>
+                <Text style={[styles.radioLabel, radius === r && styles.radioLabelActive]}>
+                  {r}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-              {companies.length === 0 && !selectedCat && (
-                <Text style={styles.noCoText}>בחר קטגוריה כדי לראות חברות</Text>
-              )}
-            </View>
+        {/* ─── Step 3: Churn → Submit ─── */}
+        {step === 3 && (
+          <View>
+            <Text style={styles.stepTitle}>
+              {`בעקבות המקרה, האם בכוונתך לעזוב את ${selectedCompanyName}?`}
+            </Text>
+
+            {CHURN_OPTIONS.map(c => (
+              <TouchableOpacity
+                key={c.value}
+                style={[styles.radioItem, churn === c.value && styles.radioItemActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setChurn(c.value);
+                }}
+              >
+                <View style={[styles.radioCircle, churn === c.value && styles.radioCircleActive]}>
+                  {churn === c.value && <View style={styles.radioInner} />}
+                </View>
+                <Text style={[styles.radioLabel, churn === c.value && styles.radioLabelActive]}>
+                  {c.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
 
-      {/* Bottom CTA */}
+      {/* Footer */}
       <View style={styles.footer}>
-        {step < 2 ? (
-          <TouchableOpacity style={styles.nextBtn} onPress={next} activeOpacity={0.85}>
-            <Text style={styles.nextBtnText}>
-              {step === 0 ? 'הבא ›' : 'הבא ›'}
-            </Text>
-          </TouchableOpacity>
-        ) : (
+        {step === 0 && (
           <TouchableOpacity
-            style={[styles.nextBtn, submitting && { opacity: 0.6 }]}
-            onPress={submit}
-            disabled={submitting}
+            style={[styles.nextBtn, !selectedCompany && styles.nextBtnDisabled]}
+            onPress={handleNext}
             activeOpacity={0.85}
           >
-            <Text style={styles.nextBtnText}>
-              {submitting ? '⏳ שולח...' : '📣 צעק עכשיו!'}
-            </Text>
+            <Text style={styles.nextBtnText}>המשך</Text>
           </TouchableOpacity>
         )}
 
-        {step === 2 && !selectedCompany && (
-          <TouchableOpacity style={styles.skipBtn} onPress={submit}>
-            <Text style={styles.skipBtnText}>דלג על בחירת חברה</Text>
-          </TouchableOpacity>
+        {(step === 1 || step === 2) && (
+          <View style={styles.footerRow}>
+            <TouchableOpacity style={styles.nextBtn2} onPress={handleNext} disabled={!canNext || aiLoading}>
+              <Text style={styles.nextBtnText}>
+                {step === 2
+                  ? (aiLoading ? '⏳ מסנן...' : '✨ סינון AI והמשך')
+                  : 'המשך'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.backBtn2} onPress={handleBack}>
+              <Text style={styles.backBtn2Text}>חזור</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {step === 3 && (
+          <View style={styles.footerRow}>
+            <TouchableOpacity
+              style={[styles.shoutBtn, (!churn || submitting) && styles.nextBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={!churn || submitting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.shoutBtnText}>
+                {submitting ? '⏳ שולח...' : '📣  Shout'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.backBtn2} onPress={handleBack}>
+              <Text style={styles.backBtn2Text}>חזור</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </KeyboardAvoidingView>
@@ -263,6 +361,7 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.white },
 
+  /* Header */
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14,
@@ -270,95 +369,140 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: C.gray200,
   },
-  backBtn: { width: 40, alignItems: 'flex-start' },
-  backText: { fontSize: 24, color: C.dark, fontWeight: '400' },
+  closeBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  closeBtnText: { fontSize: 22, color: C.dark },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: C.dark },
 
-  stepRow: {
-    flexDirection: 'row', justifyContent: 'center',
-    paddingVertical: 14, gap: 20,
-    borderBottomWidth: 1, borderBottomColor: C.gray100,
+  /* Step dots — RTL: step 0 = rightmost */
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
   },
-  stepItem: { alignItems: 'center', gap: 4 },
-  stepCircle: {
-    width: 28, height: 28, borderRadius: 14,
-    borderWidth: 2, borderColor: C.gray200,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  stepCircleActive: { backgroundColor: C.yellow, borderColor: C.yellow },
-  stepNum: { fontSize: 12, fontWeight: '700', color: C.gray400 },
-  stepNumActive: { color: C.black },
-  stepLabel: { fontSize: 10, color: C.gray400 },
-  stepLabelActive: { color: C.dark, fontWeight: '700' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.gray200 },
+  dotActive: { backgroundColor: C.yellow, width: 28, borderRadius: 4 },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: 16 },
+  scrollContent: { padding: 18, paddingBottom: 40 },
 
-  stepTitle: { fontSize: 20, fontWeight: '900', color: C.dark, textAlign: 'right', marginBottom: 6 },
-  stepSub: { fontSize: 13, color: C.gray500, textAlign: 'right', marginBottom: 18, lineHeight: 20 },
-
-  textArea: {
-    backgroundColor: C.gray100,
-    borderRadius: 14, borderWidth: 1.5, borderColor: C.gray200,
-    padding: 14, fontSize: 15, color: C.dark,
-    minHeight: 160, lineHeight: 24,
+  stepTitle: {
+    fontSize: 19, fontWeight: '900', color: C.dark,
+    textAlign: 'right', marginBottom: 6, lineHeight: 28,
   },
-  charCount: { textAlign: 'left', fontSize: 11, color: C.gray400, marginTop: 6 },
-
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.dark, textAlign: 'right', marginTop: 20, marginBottom: 12 },
-
-  angerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
-  angerBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: 10,
-    borderRadius: 12, borderWidth: 1.5, borderColor: C.gray200,
-    backgroundColor: C.white, gap: 4,
+  stepSub: {
+    fontSize: 13, color: C.gray500, textAlign: 'right',
+    marginBottom: 20, lineHeight: 20,
   },
-  angerBtnActive: { backgroundColor: C.yellow, borderColor: C.yellow },
-  angerLabel: { fontSize: 11, fontWeight: '700', color: C.gray500 },
-  angerLabelActive: { color: C.black },
-  angerDesc: { textAlign: 'center', fontSize: 13, color: C.gray600, marginTop: 10 },
 
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  /* Category grid */
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
   catCard: {
-    width: '47%',
-    padding: 16, borderRadius: 14,
+    width: '47%', padding: 16, borderRadius: 14,
     borderWidth: 1.5, borderColor: C.gray200,
-    backgroundColor: C.white,
-    alignItems: 'center', gap: 8,
+    alignItems: 'center', gap: 8, backgroundColor: C.white,
   },
-  catCardActive: { backgroundColor: C.yellow, borderColor: C.yellow },
-  catName: { fontSize: 13, fontWeight: '700', color: C.gray600, textAlign: 'center' },
+  catCardActive: { backgroundColor: '#FFFDE7', borderColor: C.yellow },
+  catName: { fontSize: 12, fontWeight: '700', color: C.gray600, textAlign: 'center' },
   catNameActive: { color: C.black },
 
-  companyList: { gap: 8 },
-  coItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 14, borderRadius: 12,
-    borderWidth: 1.5, borderColor: C.gray200,
+  /* Company picker */
+  companySection: { marginTop: 22 },
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: C.dark, textAlign: 'right', marginBottom: 10 },
+  pickerTrigger: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1.5, borderColor: C.gray200, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 14,
     backgroundColor: C.white,
   },
-  coItemActive: { backgroundColor: C.yellow, borderColor: C.yellow },
-  coIcon: {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: C.gray100,
+  pickerText: { fontSize: 15, color: C.dark, flex: 1, textAlign: 'right' },
+  pickerPlaceholder: { color: C.gray500 },
+  pickerChevron: { fontSize: 18, color: C.gray500 },
+  pickerOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: C.white, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 20, maxHeight: '70%',
+  },
+  pickerSheetTitle: {
+    fontSize: 17, fontWeight: '800', color: C.dark,
+    textAlign: 'center', marginBottom: 16,
+  },
+  pickerOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.gray200,
+  },
+  pickerOptionText: { fontSize: 15, color: C.gray600, textAlign: 'right', flex: 1 },
+
+  /* Content textarea */
+  textArea: {
+    backgroundColor: C.gray100, borderRadius: 14,
+    borderWidth: 1.5, borderColor: C.gray200,
+    padding: 14, fontSize: 15, color: C.dark,
+    minHeight: 150, lineHeight: 24,
+  },
+  charCount: { textAlign: 'left', fontSize: 11, color: C.gray500, marginTop: 6 },
+  proofBtn: {
+    marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: C.white,
+    borderWidth: 1.5, borderColor: C.gray200, borderRadius: 12,
+    paddingVertical: 14,
+  },
+  proofBtnText: { fontSize: 14, fontWeight: '700', color: C.dark },
+
+  /* Radio list */
+  radioItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    padding: 16, borderRadius: 12,
+    borderWidth: 1.5, borderColor: C.gray200,
+    marginBottom: 8, backgroundColor: C.white,
+  },
+  radioItemActive: { borderColor: C.yellow, backgroundColor: '#FFFDE7' },
+  radioCircle: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: C.gray300,
     justifyContent: 'center', alignItems: 'center',
   },
-  coIconActive: { backgroundColor: 'rgba(0,0,0,0.1)' },
-  coName: { flex: 1, fontSize: 15, fontWeight: '600', color: C.dark, textAlign: 'right' },
-  noCoText: { textAlign: 'center', color: C.gray400, fontSize: 14, paddingVertical: 20 },
+  radioCircleActive: { borderColor: C.yellow },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.yellow },
+  radioLabel: { fontSize: 15, color: C.gray500, flex: 1, textAlign: 'right' },
+  radioLabelActive: { color: C.dark, fontWeight: '700' },
 
+  /* Footer */
   footer: {
     padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
     borderTopWidth: 1, borderTopColor: C.gray100,
-    gap: 10,
+    backgroundColor: C.white,
   },
+  footerRow: { flexDirection: 'row', gap: 10 },
+
+  /* Primary next button */
   nextBtn: {
-    backgroundColor: C.yellow,
-    borderRadius: 14, paddingVertical: 15,
-    alignItems: 'center',
+    backgroundColor: C.yellow, borderRadius: 14,
+    paddingVertical: 15, alignItems: 'center',
   },
+  nextBtn2: {
+    flex: 2, backgroundColor: C.yellow, borderRadius: 14,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  nextBtnDisabled: { opacity: 0.38 },
   nextBtnText: { fontSize: 16, fontWeight: '800', color: C.black },
-  skipBtn: { alignItems: 'center', paddingVertical: 6 },
-  skipBtnText: { fontSize: 13, color: C.gray500, textDecoration: 'underline' },
+
+  /* Back button */
+  backBtn2: {
+    flex: 1, backgroundColor: C.white,
+    borderWidth: 1.5, borderColor: C.gray200,
+    borderRadius: 14, paddingVertical: 15, alignItems: 'center',
+  },
+  backBtn2Text: { fontSize: 16, fontWeight: '700', color: C.dark },
+
+  /* Shout submit button — dark with yellow text */
+  shoutBtn: {
+    flex: 2, backgroundColor: C.dark, borderRadius: 14,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  shoutBtnText: { fontSize: 16, fontWeight: '800', color: C.yellow },
 });

@@ -8,9 +8,10 @@ import { api } from '../../utils/api';
 import SquadCard from '../../components/SquadCard';
 
 const TABS = [
-  { key: 'active',  label: 'פעילות' },
-  { key: 'success', label: '✅ נצחונות' },
-  { key: 'mine',    label: 'שלי' },
+  { key: 'all',     label: 'כללי' },
+  { key: 'success', label: '🏆 נצחונות' },
+  { key: 'created', label: 'יצרתי' },
+  { key: 'joined',  label: 'הצטרפתי' },
 ];
 
 export default function SquadsScreen() {
@@ -32,7 +33,8 @@ export default function SquadsScreen() {
 
   const shown = squads.filter((s) => {
     if (tab === 'success') return s.is_success;
-    if (tab === 'mine')    return s.joined;
+    if (tab === 'joined')  return s.joined;
+    if (tab === 'created') return false; // placeholder until auth
     return !s.is_success;
   });
 

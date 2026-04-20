@@ -169,6 +169,66 @@ db.exec(`
 try { db.exec(`ALTER TABLE squads ADD COLUMN created_by TEXT`); } catch {}
 try { db.exec(`ALTER TABLE squads ADD COLUMN webinar_link TEXT`); } catch {}
 try { db.exec(`ALTER TABLE chat_rooms ADD COLUMN created_by TEXT`); } catch {}
+try { db.exec(`ALTER TABLE companies ADD COLUMN has_webinar_badge INTEGER DEFAULT 0`); } catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS webinars (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id     INTEGER,
+    squad_id       INTEGER,
+    title          TEXT NOT NULL,
+    description    TEXT,
+    scheduled_at   TEXT NOT NULL,
+    duration_min   INTEGER DEFAULT 60,
+    status         TEXT DEFAULT 'scheduled',
+    rsvp_count     INTEGER DEFAULT 0,
+    questions_count INTEGER DEFAULT 0,
+    created_at     TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS webinar_questions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    webinar_id     INTEGER NOT NULL,
+    session_id     TEXT NOT NULL,
+    asked_by       TEXT NOT NULL DEFAULT 'אנונימי',
+    content        TEXT NOT NULL,
+    upvotes        INTEGER DEFAULT 0,
+    is_answered    INTEGER DEFAULT 0,
+    answer_content TEXT,
+    created_at     TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (webinar_id) REFERENCES webinars(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS webinar_rsvps (
+    webinar_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    PRIMARY KEY (webinar_id, session_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS question_upvotes (
+    question_id INTEGER NOT NULL,
+    session_id  TEXT NOT NULL,
+    PRIMARY KEY (question_id, session_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS lessons (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    source     TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS audience_requests (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    nickname   TEXT,
+    question   TEXT NOT NULL,
+    status     TEXT DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+`);
 
 // ── Seed ────────────────────────────────────────────────────────────────────
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get().c;
@@ -350,6 +410,37 @@ addCo.run('נכסים ובניין',      catId('realestate'), 71, 36, 2400, 864
 addCo.run('דירה להשכיר',       catId('realestate'), 68, 40, 2100, 840);
 addCo.run('יד2 נדל"ן',         catId('realestate'), 55, 56, 1500, 840);
 
+// ── Lessons seed ────────────────────────────────────────────────────────────
+const lessonsCount = db.prepare('SELECT COUNT(*) as c FROM lessons').get().c;
+if (lessonsCount === 0) {
+  const il = db.prepare('INSERT INTO lessons (title, content, source) VALUES (?,?,?)');
+  [
+    ['החזר כספי על טיסה מבוטלת', 'חברת תעופה חייבת להחזיר כסף על טיסה שבוטלה תוך 21 יום. חברות רבות מקוות שתשכחו — אל תוותרו!', 'חוק שירותי תעופה 2012'],
+    ['ביטול עסקת אינטרנט', 'לפי חוק המכר מרחוק ניתן לבטל כל רכישה אינטרנטית תוך 14 יום ממועד קבלת הסחורה ללא צורך בנימוק.', 'חוק המכר מרחוק 2001'],
+    ['פיצוי על טיסה מאוחרת', 'איחור של 3 שעות ומעלה לטיסה ליעד אירופאי? מגיע לך פיצוי EU261. בדוק זכאות לפני שאתה מוותר!', 'תקנת EU261/2004'],
+    ['חיוב שגוי בסלולר', 'חברת סלולר חייבת להחזיר תוך 30 יום כל חיוב שהוכח כשגוי. אל תסתפקו בזיכוי חלקי בלבד.', 'חוק התקשורת 1982'],
+    ['פגם במוצר שנרכש', 'קניתם מוצר פגום? המוכר חייב לתקן, להחליף, להפחית מחיר או לבטל עסקה — לבחירתכם, לא שלו.', 'חוק המכר 1968'],
+    ['ביטול פוליסת ביטוח', 'ניתן לבטל כל פוליסת ביטוח תוך 30 יום ולקבל החזר יחסי מלא — ללא קנסות.', 'חוק חוזה הביטוח 1981'],
+    ['עסקה לא מורשית בבנק', 'זוהתה עסקה לא מורשית בחשבון? לבנק 30 יום לחקור ולהחזיר. תעדו הכל ופנו בכתב.', 'הנחיות בנק ישראל'],
+  ].forEach(([t, c, s]) => il.run(t, c, s));
+}
+
+// ── Demo webinar seed ────────────────────────────────────────────────────────
+const webinarCount = db.prepare('SELECT COUNT(*) as c FROM webinars').get().c;
+if (webinarCount === 0) {
+  const hotCo = db.prepare('SELECT id, name FROM companies ORDER BY anger_score DESC LIMIT 1').get();
+  if (hotCo) {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    db.prepare('INSERT INTO webinars (company_id, title, description, scheduled_at, status) VALUES (?,?,?,?,?)').run(
+      hotCo.id,
+      `עיריית שאוט — ${hotCo.name}`,
+      'שאלות ותשובות חיות עם נציגי החברה. הצטרפו ושאלו!',
+      tomorrow,
+      'scheduled'
+    );
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr + 'Z').getTime()) / 1000;
@@ -405,12 +496,16 @@ app.get('/api/shouts', (req, res) => {
     const echoed = db.prepare('SELECT 1 FROM user_echoes WHERE shout_id=? AND session_id=?').get(r.id, session);
     const boosted = db.prepare('SELECT 1 FROM user_boosts WHERE shout_id=? AND session_id=?').get(r.id, session);
     const responses = db.prepare('SELECT * FROM shout_responses WHERE shout_id=? ORDER BY created_at DESC').all(r.id);
+    const relatedSquad = r.company_id
+      ? db.prepare('SELECT id, name, current_members, target_members FROM squads WHERE company_id=? AND is_success=0 ORDER BY current_members DESC LIMIT 1').get(r.company_id)
+      : null;
     return {
       ...r,
       time_ago: timeAgo(r.created_at),
       echoed: !!echoed,
       boosted: !!boosted,
       responses: responses.map(rr => ({ ...rr, time_ago: timeAgo(rr.created_at) })),
+      related_squad: relatedSquad || null,
     };
   });
 
@@ -938,6 +1033,92 @@ app.get('/api/chat/squad/:squad_id', (req, res) => {
   res.json({ room });
 });
 
+// ── Webinars (Public) ─────────────────────────────────────────────────────────
+app.get('/api/webinars', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  const webinars = db.prepare(`
+    SELECT w.*, c.name as company_name, sq.name as squad_name
+    FROM webinars w
+    LEFT JOIN companies c ON w.company_id = c.id
+    LEFT JOIN squads sq ON w.squad_id = sq.id
+    WHERE w.status IN ('scheduled', 'live')
+    ORDER BY w.scheduled_at ASC
+    LIMIT 10
+  `).all();
+  const result = webinars.map(w => {
+    const rsvped = db.prepare('SELECT 1 FROM webinar_rsvps WHERE webinar_id=? AND session_id=?').get(w.id, session);
+    return { ...w, rsvped: !!rsvped };
+  });
+  res.json(result);
+});
+
+app.post('/api/webinars/:id/rsvp', (req, res) => {
+  const { id } = req.params;
+  const session = req.headers['x-session'] || 'default';
+  const webinar = db.prepare('SELECT * FROM webinars WHERE id=?').get(id);
+  if (!webinar) return res.status(404).json({ error: 'not found' });
+  const existing = db.prepare('SELECT 1 FROM webinar_rsvps WHERE webinar_id=? AND session_id=?').get(id, session);
+  if (existing) {
+    db.prepare('DELETE FROM webinar_rsvps WHERE webinar_id=? AND session_id=?').run(id, session);
+    db.prepare('UPDATE webinars SET rsvp_count = MAX(0, rsvp_count - 1) WHERE id=?').run(id);
+    return res.json({ rsvped: false, rsvp_count: Math.max(0, webinar.rsvp_count - 1) });
+  }
+  db.prepare('INSERT INTO webinar_rsvps (webinar_id, session_id) VALUES (?,?)').run(id, session);
+  db.prepare('UPDATE webinars SET rsvp_count = rsvp_count + 1 WHERE id=?').run(id);
+  res.json({ rsvped: true, rsvp_count: webinar.rsvp_count + 1 });
+});
+
+app.get('/api/webinars/:id/questions', (req, res) => {
+  const { id } = req.params;
+  const session = req.headers['x-session'] || 'default';
+  const questions = db.prepare(`
+    SELECT q.*,
+      CASE WHEN qu.session_id IS NOT NULL THEN 1 ELSE 0 END as upvoted
+    FROM webinar_questions q
+    LEFT JOIN question_upvotes qu ON qu.question_id = q.id AND qu.session_id = ?
+    WHERE q.webinar_id = ?
+    ORDER BY q.upvotes DESC, q.created_at ASC
+  `).all(session, id);
+  res.json(questions);
+});
+
+app.post('/api/webinars/:id/questions', (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  if (!content?.trim()) return res.status(400).json({ error: 'content required' });
+  const webinar = db.prepare('SELECT id FROM webinars WHERE id=?').get(id);
+  if (!webinar) return res.status(404).json({ error: 'not found' });
+  const user = db.prepare('SELECT nickname FROM users WHERE session_id=?').get(session);
+  const asked_by = user?.nickname || 'אנונימי';
+  const r = db.prepare('INSERT INTO webinar_questions (webinar_id, session_id, asked_by, content) VALUES (?,?,?,?)').run(id, session, asked_by, content.trim());
+  db.prepare('UPDATE webinars SET questions_count = questions_count + 1 WHERE id=?').run(id);
+  res.json(db.prepare('SELECT * FROM webinar_questions WHERE id=?').get(r.lastInsertRowid));
+});
+
+app.post('/api/webinars/:id/questions/:qid/upvote', (req, res) => {
+  const { qid } = req.params;
+  const session = req.headers['x-session'] || 'default';
+  const existing = db.prepare('SELECT 1 FROM question_upvotes WHERE question_id=? AND session_id=?').get(qid, session);
+  if (existing) {
+    db.prepare('DELETE FROM question_upvotes WHERE question_id=? AND session_id=?').run(qid, session);
+    db.prepare('UPDATE webinar_questions SET upvotes = MAX(0, upvotes - 1) WHERE id=?').run(qid);
+    return res.json({ upvoted: false });
+  }
+  db.prepare('INSERT INTO question_upvotes (question_id, session_id) VALUES (?,?)').run(qid, session);
+  db.prepare('UPDATE webinar_questions SET upvotes = upvotes + 1 WHERE id=?').run(qid);
+  res.json({ upvoted: true });
+});
+
+app.post('/api/arena/request', (req, res) => {
+  const { question } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  if (!question?.trim()) return res.status(400).json({ error: 'question required' });
+  const user = db.prepare('SELECT nickname FROM users WHERE session_id=?').get(session);
+  db.prepare('INSERT INTO audience_requests (session_id, nickname, question) VALUES (?,?,?)').run(session, user?.nickname || 'אנונימי', question.trim());
+  res.json({ ok: true });
+});
+
 // ── Arena ─────────────────────────────────────────────────────────────────────
 app.get('/api/arena', (req, res) => {
   // Radar: top 3 companies by anger_score with recent shout volume
@@ -1022,7 +1203,12 @@ app.get('/api/arena', (req, res) => {
     ORDER BY s.echoes DESC LIMIT 5
   `).all().map(s => ({ ...s, time_ago: timeAgo(s.created_at) }));
 
-  res.json({ radar, queen: queen ? { ...queen, time_ago: timeAgo(queen.created_at) } : null, top5, vs, categoryPoll: pollWithPct, wins, stats, hotShouts });
+  const allLessons = db.prepare('SELECT * FROM lessons ORDER BY id').all();
+  const todayLesson = allLessons.length > 0 ? allLessons[new Date().getDay() % allLessons.length] : null;
+  const latestRequest = db.prepare("SELECT * FROM audience_requests WHERE status='answered' ORDER BY created_at DESC LIMIT 1").get();
+  const pendingRequestsCount = db.prepare("SELECT COUNT(*) as c FROM audience_requests WHERE status='pending'").get().c;
+
+  res.json({ radar, queen: queen ? { ...queen, time_ago: timeAgo(queen.created_at) } : null, top5, vs, categoryPoll: pollWithPct, wins, stats, hotShouts, todayLesson, latestRequest, pendingRequestsCount });
 });
 
 // ── Global Search ─────────────────────────────────────────────────────────────
