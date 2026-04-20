@@ -1,32 +1,34 @@
-const BADGES = [
-  { icon: '🔥', label: 'שואג ראשוני', desc: 'פרסמת את הצעקה הראשונה שלך', locked: false },
-  { icon: '⚡', label: 'לוחם מאבק', desc: 'הצטרפת ל-3 קבוצות לחץ', locked: false },
-  { icon: '📣', label: 'נגן עיקרי', desc: 'קיבלת 100 הדהודים', locked: false },
-  { icon: '🏆', label: 'מנצח', desc: 'השתתפת במאבק שנגמר בניצחון', locked: false },
-  { icon: '🎯', label: 'מדויק', desc: 'שלחת 5 צעקות עם אסמכתה', locked: true },
-  { icon: '👑', label: 'מנהיג מאבק', desc: 'יצרת קבוצת לחץ', locked: true },
-];
+import { useState, useEffect } from 'react';
+import { API } from '../App.jsx';
 
-const MY_SHOUTS = [
-  { id: 1, company: 'הוט', text: 'חסמו לי את השירות ביום לפני חגים...', echoes: 312, time: 'לפני 3 ימים' },
-  { id: 2, company: 'רכבת ישראל', text: 'ביטול לא מוצדק ברגע האחרון...', echoes: 88, time: 'לפני שבוע' },
-  { id: 3, company: 'הראל ביטוח', text: 'סרבו לתביעה עם כל המסמכים...', echoes: 45, time: 'לפני 2 שבועות' },
-];
+export default function Profile({ onClose, onNav, onLogout }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-export default function Profile({ onClose, onNav }) {
-  const nickname = localStorage.getItem('shout_nickname') || 'אנונימי_84';
+  useEffect(() => {
+    API.get('/api/profile')
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const nickname = data?.nickname || localStorage.getItem('shout_nickname') || 'אנונימי';
+  const avatarColor = data?.avatar_color || localStorage.getItem('shout_avatar_color') || '#F97316';
   const initial = nickname.charAt(0);
 
-  const stats = [
-    { label: 'צעקות', value: '3', icon: '📣' },
-    { label: 'הדהודים', value: '1.2K', icon: '🤝' },
-    { label: 'קבוצות', value: '2', icon: '⚡' },
-    { label: 'נקודות', value: '480', icon: '⭐' },
+  const badges = [
+    { icon: '🔥', label: 'שואג ראשוני', desc: 'פרסמת את הצעקה הראשונה שלך', earned: (data?.stats?.shouts || 0) >= 1 },
+    { icon: '⚡', label: 'לוחם מאבק', desc: 'הצטרפת ל-3 קבוצות לחץ', earned: (data?.stats?.squads || 0) >= 3 },
+    { icon: '📣', label: 'נגן עיקרי', desc: 'קיבלת 100 הזדהויות', earned: (data?.stats?.echoes || 0) >= 100 },
+    { icon: '👑', label: 'מנהיג מאבק', desc: 'יצרת קבוצת לחץ', earned: (data?.stats?.squads_created || 0) >= 1 },
+    { icon: '🎯', label: 'מדויק', desc: 'שלחת 5 צעקות עם אסמכתה', earned: false },
+    { icon: '🏆', label: 'מנצח', desc: 'השתתפת במאבק מנצח', earned: false },
   ];
+
+  const isLoggedIn = !!localStorage.getItem('shout_logged_in');
 
   return (
     <div style={{ background: 'var(--gray-100)', minHeight: '100%', paddingBottom: 40 }}>
-      {/* Profile header */}
+      {/* Header */}
       <div className="profile-header">
         <button
           onClick={onClose}
@@ -37,25 +39,30 @@ export default function Profile({ onClose, onNav }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, cursor: 'pointer', color: '#fff',
           }}
-        >
-          ✕
-        </button>
-        <div className="profile-avatar-large">{initial}</div>
+        >✕</button>
+        <div
+          className="profile-avatar-large"
+          style={{ background: avatarColor }}
+        >{initial}</div>
         <div className="profile-nickname">{nickname}</div>
-        <div className="profile-since">חבר מאז ינואר 2024 · צרכן פעיל</div>
+        <div className="profile-since">
+          {loading ? '...' : `חבר ${data?.member_since} · צרכן פעיל`}
+        </div>
       </div>
 
       {/* Stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '12px 12px 0' }}>
-        {stats.map((s, i) => (
-          <div
-            key={i}
-            style={{
-              textAlign: 'center', padding: '12px 6px',
-              background: 'var(--white)', borderRadius: 12,
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
+        {[
+          { label: 'צעקות',    value: loading ? '…' : (data?.stats?.shouts || 0),               icon: '📣' },
+          { label: 'הזדהויות', value: loading ? '…' : (data?.stats?.echoes || 0).toLocaleString('he-IL'), icon: '🤝' },
+          { label: 'קבוצות',   value: loading ? '…' : (data?.stats?.squads || 0),                icon: '⚡' },
+          { label: 'יצרתי',    value: loading ? '…' : (data?.stats?.squads_created || 0),        icon: '👑' },
+        ].map((s, i) => (
+          <div key={i} style={{
+            textAlign: 'center', padding: '12px 6px',
+            background: 'var(--white)', borderRadius: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
             <div style={{ fontSize: 20 }}>{s.icon}</div>
             <div style={{ fontSize: 18, fontWeight: 900 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: 'var(--gray-500)' }}>{s.label}</div>
@@ -63,52 +70,24 @@ export default function Profile({ onClose, onNav }) {
         ))}
       </div>
 
-      {/* Data wallet */}
-      <div style={{ margin: '12px 12px 0' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #1C1C1E 0%, #374151 100%)',
-          borderRadius: 16, padding: '16px', color: '#fff',
-        }}>
-          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🪙 ארנק הנתונים</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 12, lineHeight: 1.5 }}>
-            הנתונים שלך שמורים בצורה מוצפנת. ניתן לאשר שיתוף מחקרי אנונימי ולצבור נקודות.
-          </div>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            background: 'rgba(255,255,255,0.1)', borderRadius: 10,
-            padding: '10px 12px', marginBottom: 12,
-          }}>
-            <span style={{ fontSize: 13 }}>נקודות נצברות</span>
-            <span style={{ color: 'var(--yellow)', fontWeight: 800, fontSize: 15 }}>480 pts</span>
-          </div>
-          <button style={{
-            width: '100%', padding: '11px',
-            background: 'var(--yellow)', border: 'none', borderRadius: 10,
-            fontFamily: 'Heebo', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            color: 'var(--black)',
-          }}>
-            🔓 אשר שיתוף מחקרי אנונימי
-          </button>
-        </div>
+      {/* Privacy notice */}
+      <div style={{ margin: '12px 12px 0', padding: '10px 14px', background: '#F0FDF4', borderRadius: 12, border: '1px solid #86EFAC', fontSize: 12, color: '#15803D', direction: 'rtl' }}>
+        🔒 הפרופיל שלך פרטי. אנשים אחרים רואים רק את הכינוי שלך וספירת הצעקות.
       </div>
 
       {/* Badges */}
       <div style={{ padding: '16px 12px 0' }}>
         <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>🏅 תגים והישגים</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {BADGES.map((b, i) => (
-            <div
-              key={i}
-              style={{
-                background: b.locked ? 'var(--gray-50)' : 'var(--white)',
-                borderRadius: 12, padding: '12px',
-                border: '1.5px solid',
-                borderColor: b.locked ? 'var(--gray-200)' : 'var(--yellow)',
-                opacity: b.locked ? 0.55 : 1,
-                boxShadow: b.locked ? 'none' : 'var(--shadow-sm)',
-              }}
-            >
-              <div style={{ fontSize: 24, marginBottom: 4 }}>{b.locked ? '🔒' : b.icon}</div>
+          {badges.map((b, i) => (
+            <div key={i} style={{
+              background: b.earned ? 'var(--white)' : 'var(--gray-50)',
+              borderRadius: 12, padding: '12px',
+              border: `1.5px solid ${b.earned ? 'var(--yellow)' : 'var(--gray-200)'}`,
+              opacity: b.earned ? 1 : 0.55,
+              boxShadow: b.earned ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{b.earned ? b.icon : '🔒'}</div>
               <div style={{ fontSize: 12, fontWeight: 700 }}>{b.label}</div>
               <div style={{ fontSize: 10, color: 'var(--gray-500)', marginTop: 2, lineHeight: 1.4 }}>{b.desc}</div>
             </div>
@@ -119,31 +98,52 @@ export default function Profile({ onClose, onNav }) {
       {/* My shouts */}
       <div style={{ padding: '16px 12px 0' }}>
         <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>📣 הצעקות שלי</div>
-        {MY_SHOUTS.map(s => (
-          <div
-            key={s.id}
-            style={{
-              background: 'var(--white)', borderRadius: 12,
-              padding: '12px 14px', marginBottom: 8,
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)' }}>טוען...</div>
+        ) : !data?.shouts?.length ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--gray-400)', fontSize: 13 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+            עדיין לא פרסמת צעקות
+          </div>
+        ) : data.shouts.map(s => (
+          <div key={s.id} style={{
+            background: 'var(--white)', borderRadius: 12,
+            padding: '12px 14px', marginBottom: 8,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{
-                background: 'var(--red)', color: '#fff',
-                borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700,
-              }}>
-                {s.company}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>{s.time}</span>
+              {s.company_name ? (
+                <span style={{ background: 'var(--red)', color: '#fff', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                  {s.company_name}
+                </span>
+              ) : <span />}
+              <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>{s.time_ago}</span>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--gray-700)', marginBottom: 6 }}>{s.text}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-700)', marginBottom: 6, direction: 'rtl', lineHeight: 1.5 }}>
+              {s.content.length > 120 ? s.content.slice(0, 120) + '…' : s.content}
+            </div>
             <div style={{ fontSize: 12, color: 'var(--orange)', fontWeight: 600 }}>
-              🤝 {s.echoes} הדהודים
+              🤝 {s.echoes || 0} הזדהו
             </div>
           </div>
         ))}
       </div>
+
+      {/* Logout */}
+      {isLoggedIn && (
+        <div style={{ padding: '16px 12px 0' }}>
+          <button
+            onClick={onLogout}
+            style={{
+              width: '100%', padding: 13, borderRadius: 12, border: '1.5px solid var(--gray-200)',
+              background: 'var(--white)', fontFamily: 'Heebo', fontWeight: 700, fontSize: 14,
+              cursor: 'pointer', color: 'var(--red)',
+            }}
+          >
+            🚪 התנתקות
+          </button>
+        </div>
+      )}
     </div>
   );
 }

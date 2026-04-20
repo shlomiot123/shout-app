@@ -144,7 +144,7 @@ export default function Squads({ onCreateSquad, requireLogin, onSquadLobby }) {
     const matchTab =
       tab === 'success' ? s.is_success :
       tab === 'joined'  ? s.joined :
-      tab === 'created' ? false :
+      tab === 'created' ? s.created_by_me :
       !s.is_success;
     const matchSearch = !search || s.name.includes(search) || s.company_name?.includes(search);
     return matchTab && matchSearch;

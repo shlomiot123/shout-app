@@ -165,6 +165,11 @@ db.exec(`
   );
 `);
 
+// ── Migrations ───────────────────────────────────────────────────────────────
+try { db.exec(`ALTER TABLE squads ADD COLUMN created_by TEXT`); } catch {}
+try { db.exec(`ALTER TABLE squads ADD COLUMN webinar_link TEXT`); } catch {}
+try { db.exec(`ALTER TABLE chat_rooms ADD COLUMN created_by TEXT`); } catch {}
+
 // ── Seed ────────────────────────────────────────────────────────────────────
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get().c;
 if (catCount === 0) {
@@ -412,18 +417,40 @@ app.get('/api/shouts', (req, res) => {
   res.json(result);
 });
 
+// Anger score: volume (log) + severity + responsiveness. Runs after shout create/echo.
+function recomputeAngerScore(companyId) {
+  if (!companyId) return;
+  const co = db.prepare('SELECT total_shouts, response_rate, resolved_shouts FROM companies WHERE id=?').get(companyId);
+  if (!co) return;
+  const metrics = db.prepare(
+    'SELECT COUNT(*) as cnt, COALESCE(AVG(anger_level),3) as avg_anger FROM shouts WHERE company_id=?'
+  ).get(companyId);
+  const total = Math.max(co.total_shouts || 0, metrics.cnt || 0);
+  const volume   = total > 0 ? (Math.log10(total + 1) / Math.log10(10001)) * 50 : 0;
+  const severity = (metrics.avg_anger / 5) * 30;
+  const response = Math.max(0, 50 - (co.response_rate || 0)) * 0.4;
+  const unresolved = total > 0 ? (1 - (co.resolved_shouts || 0) / total) * 10 : 0;
+  const score = Math.min(100, Math.round(volume + severity + response + unresolved));
+  db.prepare('UPDATE companies SET anger_score=? WHERE id=?').run(score, companyId);
+}
+
 app.post('/api/shouts', (req, res) => {
   const { username, company_id, category_id, content, anger_level, has_proof } = req.body;
   if (!content) return res.status(400).json({ error: 'content required' });
 
+  const session = req.headers['x-session'] || 'default';
+  const user = db.prepare('SELECT nickname FROM users WHERE session_id=?').get(session);
+  const nick = user?.nickname || username || 'אנונימי_84';
+
   const result = db.prepare(`
     INSERT INTO shouts (username, company_id, category_id, content, anger_level, has_proof)
     VALUES (?,?,?,?,?,?)
-  `).run(username || 'אנונימי_84', company_id || null, category_id || null, content, anger_level || 3, has_proof ? 1 : 0);
+  `).run(nick, company_id || null, category_id || null, content, anger_level || 3, has_proof ? 1 : 0);
 
-  // Update company total_shouts
+  // Update company stats + recompute anger score
   if (company_id) {
-    db.prepare('UPDATE companies SET total_shouts = total_shouts + 1, anger_score = MIN(100, anger_score + 1) WHERE id = ?').run(company_id);
+    db.prepare('UPDATE companies SET total_shouts = total_shouts + 1 WHERE id = ?').run(company_id);
+    recomputeAngerScore(company_id);
   }
 
   // Add notification
@@ -442,10 +469,14 @@ app.post('/api/shouts/:id/echo', (req, res) => {
   if (existing) {
     db.prepare('DELETE FROM user_echoes WHERE shout_id=? AND session_id=?').run(id, session);
     db.prepare('UPDATE shouts SET echoes = MAX(0, echoes - 1) WHERE id=?').run(id);
+    const shout = db.prepare('SELECT company_id FROM shouts WHERE id=?').get(id);
+    recomputeAngerScore(shout?.company_id);
     return res.json({ echoed: false });
   } else {
     db.prepare('INSERT INTO user_echoes (shout_id, session_id) VALUES (?,?)').run(id, session);
     db.prepare('UPDATE shouts SET echoes = echoes + 1 WHERE id=?').run(id);
+    const shout = db.prepare('SELECT company_id FROM shouts WHERE id=?').get(id);
+    recomputeAngerScore(shout?.company_id);
     return res.json({ echoed: true });
   }
 });
@@ -489,7 +520,13 @@ app.get('/api/squads', (req, res) => {
 
   const result = rows.map(r => {
     const joined = db.prepare('SELECT 1 FROM squad_joins WHERE squad_id=? AND session_id=?').get(r.id, session);
-    return { ...r, joined: !!joined, progress: Math.round((r.current_members / r.target_members) * 100) };
+    return {
+      ...r,
+      joined: !!joined,
+      created_by_me: r.created_by === session,
+      is_admin: r.created_by === session,
+      progress: Math.round((r.current_members / r.target_members) * 100),
+    };
   });
 
   res.json(result);
@@ -497,14 +534,21 @@ app.get('/api/squads', (req, res) => {
 
 app.post('/api/squads', (req, res) => {
   const { name, description, company_id, category_id, target_members, goal_description, goal_type } = req.body;
+  const session = req.headers['x-session'] || 'default';
   if (!name) return res.status(400).json({ error: 'name required' });
 
   const result = db.prepare(`
-    INSERT INTO squads (name, description, company_id, category_id, target_members, current_members, goal_description, goal_type)
-    VALUES (?,?,?,?,?,0,?,?)
-  `).run(name, description || '', company_id || null, category_id || null, target_members || 1000, goal_description || '', goal_type || 'legal');
+    INSERT INTO squads (name, description, company_id, category_id, target_members, current_members, goal_description, goal_type, created_by)
+    VALUES (?,?,?,?,?,0,?,?,?)
+  `).run(name, description || '', company_id || null, category_id || null, target_members || 1000, goal_description || '', goal_type || 'legal', session);
 
-  res.json(db.prepare('SELECT * FROM squads WHERE id=?').get(result.lastInsertRowid));
+  // Auto-join creator
+  const id = result.lastInsertRowid;
+  db.prepare('INSERT OR IGNORE INTO squad_joins (squad_id, session_id) VALUES (?,?)').run(id, session);
+  db.prepare('UPDATE squads SET current_members = current_members + 1 WHERE id=?').run(id);
+
+  const squad = db.prepare('SELECT * FROM squads WHERE id=?').get(id);
+  res.json({ ...squad, joined: true, created_by_me: true, is_admin: true });
 });
 
 app.get('/api/squads/:id', (req, res) => {
@@ -519,7 +563,24 @@ app.get('/api/squads/:id', (req, res) => {
   `).get(id);
   if (!squad) return res.status(404).json({ error: 'not found' });
   const joined = !!db.prepare('SELECT 1 FROM squad_joins WHERE squad_id=? AND session_id=?').get(id, session);
-  res.json({ ...squad, joined, progress: Math.round((squad.current_members / squad.target_members) * 100) });
+  res.json({
+    ...squad,
+    joined,
+    is_admin: squad.created_by === session,
+    progress: Math.round((squad.current_members / squad.target_members) * 100),
+  });
+});
+
+// Update webinar link (admin only)
+app.put('/api/squads/:id/webinar-link', (req, res) => {
+  const { id } = req.params;
+  const { webinar_link } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  const squad = db.prepare('SELECT created_by FROM squads WHERE id=?').get(id);
+  if (!squad) return res.status(404).json({ error: 'not found' });
+  if (squad.created_by !== session) return res.status(403).json({ error: 'not admin' });
+  db.prepare('UPDATE squads SET webinar_link=? WHERE id=?').run(webinar_link || null, id);
+  res.json({ ok: true });
 });
 
 app.post('/api/squads/:id/join', (req, res) => {
@@ -766,23 +827,37 @@ function ensureGroupRoom(squadId) {
 app.get('/api/chat/rooms', (req, res) => {
   const session = req.headers['x-session'] || 'default';
 
-  // Group rooms: squads the user joined
+  // Squad-based group rooms
   const joinedSquads = db.prepare('SELECT squad_id FROM squad_joins WHERE session_id=?').all(session);
-  const groupRooms = joinedSquads.map(({ squad_id }) => {
+  const squadRooms = joinedSquads.map(({ squad_id }) => {
     const room = ensureGroupRoom(squad_id);
     const last = db.prepare('SELECT * FROM chat_messages WHERE room_id=? ORDER BY created_at DESC LIMIT 1').get(room.id);
-    const count = db.prepare('SELECT COUNT(*) as c FROM chat_messages WHERE room_id=?').get(room.id).c;
-    return { ...room, last_message: last ? { content: last.content, nickname: last.nickname, time: timeAgo(last.created_at) } : null, message_count: count };
+    return { ...room, last_message: last ? { content: last.content, nickname: last.nickname, time: timeAgo(last.created_at) } : null };
   });
+
+  // Manually-created group rooms (member-based)
+  const memberGroupRooms = db.prepare(`
+    SELECT cr.* FROM chat_rooms cr
+    JOIN chat_room_members crm ON crm.room_id = cr.id AND crm.session_id = ?
+    WHERE cr.type = 'group'
+  `).all(session);
+  const memberGroupIds = new Set(squadRooms.map(r => r.id));
+  const extraGroupRooms = memberGroupRooms.filter(r => !memberGroupIds.has(r.id)).map(r => {
+    const last = db.prepare('SELECT * FROM chat_messages WHERE room_id=? ORDER BY created_at DESC LIMIT 1').get(r.id);
+    return { ...r, last_message: last ? { content: last.content, nickname: last.nickname, time: timeAgo(last.created_at) } : null };
+  });
+
+  const groupRooms = [...squadRooms, ...extraGroupRooms];
 
   // Direct rooms
   const directRooms = db.prepare(`
-    SELECT cr.*, cm.content as last_content, cm.nickname as last_nick, cm.created_at as last_at
-    FROM chat_rooms cr
+    SELECT cr.* FROM chat_rooms cr
     JOIN chat_room_members crm ON crm.room_id = cr.id AND crm.session_id = ?
-    LEFT JOIN chat_messages cm ON cm.id = (SELECT id FROM chat_messages WHERE room_id=cr.id ORDER BY created_at DESC LIMIT 1)
     WHERE cr.type = 'direct'
-  `).all(session);
+  `).all(session).map(r => {
+    const last = db.prepare('SELECT * FROM chat_messages WHERE room_id=? ORDER BY created_at DESC LIMIT 1').get(r.id);
+    return { ...r, last_message: last ? { content: last.content, nickname: last.nickname, time: timeAgo(last.created_at) } : null };
+  });
 
   res.json({ group: groupRooms, direct: directRooms });
 });
@@ -797,9 +872,25 @@ app.post('/api/chat/rooms/:id/messages', (req, res) => {
   const { id } = req.params;
   const { content } = req.body;
   const session = req.headers['x-session'] || 'default';
-  const user = db.prepare('SELECT * FROM users WHERE session_id=?').get(session);
-  const nickname = user?.nickname || 'אנונימי';
   if (!content?.trim()) return res.status(400).json({ error: 'content required' });
+
+  const room = db.prepare('SELECT * FROM chat_rooms WHERE id=?').get(id);
+  if (!room) return res.status(404).json({ error: 'room not found' });
+
+  // WhatsApp rule: only members can send. For group rooms, membership via squad_joins or chat_room_members.
+  if (room.type === 'group') {
+    const isMember = room.squad_id
+      ? db.prepare('SELECT 1 FROM squad_joins WHERE squad_id=? AND session_id=?').get(room.squad_id, session)
+      : db.prepare('SELECT 1 FROM chat_room_members WHERE room_id=? AND session_id=?').get(id, session);
+    if (!isMember) return res.status(403).json({ error: 'join the squad to chat' });
+  } else {
+    // Direct: must be a member
+    const isMember = db.prepare('SELECT 1 FROM chat_room_members WHERE room_id=? AND session_id=?').get(id, session);
+    if (!isMember) return res.status(403).json({ error: 'not a member of this conversation' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE session_id=?').get(session);
+  const nickname = user?.nickname || localStorage?.getItem?.('shout_nickname') || 'אנונימי';
   const r = db.prepare('INSERT INTO chat_messages (room_id, session_id, nickname, content) VALUES (?,?,?,?)').run(id, session, nickname, content.trim());
   const msg = db.prepare('SELECT * FROM chat_messages WHERE id=?').get(r.lastInsertRowid);
   res.json({ ...msg, time_ago: 'עכשיו' });
@@ -832,9 +923,106 @@ app.post('/api/chat/direct', (req, res) => {
   res.json({ room });
 });
 
+app.post('/api/chat/group', (req, res) => {
+  const { name } = req.body;
+  const session = req.headers['x-session'] || 'default';
+  if (!name?.trim()) return res.status(400).json({ error: 'name required' });
+  const r = db.prepare('INSERT INTO chat_rooms (type, name) VALUES (?,?)').run('group', name.trim());
+  const room = db.prepare('SELECT * FROM chat_rooms WHERE id=?').get(r.lastInsertRowid);
+  db.prepare('INSERT OR IGNORE INTO chat_room_members (room_id, session_id) VALUES (?,?)').run(room.id, session);
+  res.json({ room });
+});
+
 app.get('/api/chat/squad/:squad_id', (req, res) => {
   const room = ensureGroupRoom(req.params.squad_id);
   res.json({ room });
+});
+
+// ── Arena ─────────────────────────────────────────────────────────────────────
+app.get('/api/arena', (req, res) => {
+  // Radar: top 3 companies by anger_score with recent shout volume
+  const radar = db.prepare(`
+    SELECT co.id, co.name, co.anger_score, co.total_shouts, cat.name as category_name,
+      (SELECT COUNT(*) FROM shouts s WHERE s.company_id = co.id) as real_shouts
+    FROM companies co
+    LEFT JOIN categories cat ON co.category_id = cat.id
+    ORDER BY co.anger_score DESC, co.total_shouts DESC
+    LIMIT 4
+  `).all();
+
+  // Queen Shout: shout with most echoes
+  const queen = db.prepare(`
+    SELECT s.*, c.name as company_name, cat.name as category_name
+    FROM shouts s
+    LEFT JOIN companies c ON s.company_id = c.id
+    LEFT JOIN categories cat ON s.category_id = cat.id
+    ORDER BY s.echoes DESC LIMIT 1
+  `).get();
+
+  // Top5: 5 companies highest anger
+  const top5 = db.prepare(`
+    SELECT co.id, co.name, co.anger_score, cat.name as category_name
+    FROM companies co
+    LEFT JOIN categories cat ON co.category_id = cat.id
+    ORDER BY co.anger_score DESC LIMIT 5
+  `).all();
+
+  // VS: pick 2 companies in same category with high anger
+  const vs = db.prepare(`
+    SELECT co.id, co.name, co.anger_score, cat.name as category_name
+    FROM companies co
+    LEFT JOIN categories cat ON co.category_id = cat.id
+    WHERE co.category_id = (
+      SELECT category_id FROM companies GROUP BY category_id ORDER BY AVG(anger_score) DESC LIMIT 1
+    )
+    ORDER BY RANDOM() LIMIT 2
+  `).all();
+
+  // Category poll: distribution of shouts by category
+  const categoryPoll = db.prepare(`
+    SELECT cat.name, cat.slug, COUNT(s.id) as shout_count
+    FROM categories cat
+    LEFT JOIN shouts s ON s.category_id = cat.id
+    WHERE cat.slug != 'all'
+    GROUP BY cat.id
+    ORDER BY shout_count DESC
+    LIMIT 6
+  `).all();
+  const totalForPoll = categoryPoll.reduce((a, c) => a + c.shout_count, 0) || 1;
+  const pollWithPct = categoryPoll.map(c => ({
+    label: c.name,
+    pct: Math.round((c.shout_count / totalForPoll) * 100),
+    count: c.shout_count,
+  }));
+
+  // Wins: successful squads
+  const wins = db.prepare(`
+    SELECT sq.*, c.name as company_name, cat.name as category_name
+    FROM squads sq
+    LEFT JOIN companies c ON sq.company_id = c.id
+    LEFT JOIN categories cat ON sq.category_id = cat.id
+    WHERE sq.is_success = 1
+    ORDER BY sq.current_members DESC
+  `).all();
+
+  // Stats
+  const stats = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM shouts) as total_shouts,
+      (SELECT COUNT(*) FROM squads) as total_squads,
+      (SELECT COUNT(*) FROM users) as total_users,
+      (SELECT ROUND(AVG(anger_score)) FROM companies) as avg_anger,
+      (SELECT COUNT(*) FROM shouts WHERE is_resolved=1) as resolved
+  `).get();
+
+  // Recent hot shouts (last 5 by echoes)
+  const hotShouts = db.prepare(`
+    SELECT s.*, c.name as company_name
+    FROM shouts s LEFT JOIN companies c ON s.company_id = c.id
+    ORDER BY s.echoes DESC LIMIT 5
+  `).all().map(s => ({ ...s, time_ago: timeAgo(s.created_at) }));
+
+  res.json({ radar, queen: queen ? { ...queen, time_ago: timeAgo(queen.created_at) } : null, top5, vs, categoryPoll: pollWithPct, wins, stats, hotShouts });
 });
 
 // ── Global Search ─────────────────────────────────────────────────────────────
@@ -871,6 +1059,51 @@ app.get('/api/search', (req, res) => {
   `).all(like);
 
   res.json({ shouts, companies, squads, users });
+});
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+app.get('/api/profile', (req, res) => {
+  const session = req.headers['x-session'] || 'default';
+  const user = db.prepare('SELECT id, nickname, avatar_color, created_at FROM users WHERE session_id=?').get(session);
+  const nickname = user?.nickname || 'אנונימי';
+
+  const shouts = db.prepare(`
+    SELECT s.*, c.name as company_name FROM shouts s
+    LEFT JOIN companies c ON s.company_id = c.id
+    WHERE s.username = ?
+    ORDER BY s.created_at DESC LIMIT 20
+  `).all(nickname).map(s => ({ ...s, time_ago: timeAgo(s.created_at) }));
+
+  const squadsCreated = db.prepare('SELECT COUNT(*) as c FROM squads WHERE created_by=?').get(session)?.c || 0;
+  const squadsJoined = db.prepare('SELECT COUNT(*) as c FROM squad_joins WHERE session_id=?').get(session)?.c || 0;
+  const totalEchoes = shouts.reduce((a, s) => a + (s.echoes || 0), 0);
+  const memberSince = user?.created_at ? timeAgo(user.created_at) : 'לאחרונה';
+
+  res.json({
+    nickname,
+    avatar_color: user?.avatar_color || '#F97316',
+    member_since: memberSince,
+    stats: {
+      shouts: shouts.length,
+      echoes: totalEchoes,
+      squads: squadsJoined,
+      squads_created: squadsCreated,
+    },
+    shouts,
+  });
+});
+
+// ── User search (for direct chat) ─────────────────────────────────────────────
+app.get('/api/users', (req, res) => {
+  const q = (req.query.q || '').trim();
+  const session = req.headers['x-session'] || 'default';
+  if (!q || q.length < 2) return res.json([]);
+  const users = db.prepare(`
+    SELECT id, nickname, avatar_color, session_id FROM users
+    WHERE nickname LIKE ? AND session_id != ?
+    LIMIT 10
+  `).all(`%${q}%`, session);
+  res.json(users.map(u => ({ id: u.id, nickname: u.nickname, avatar_color: u.avatar_color, session_id: u.session_id })));
 });
 
 // ── Static (production) ──────────────────────────────────────────────────────

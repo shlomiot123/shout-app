@@ -17,7 +17,156 @@ function Avatar({ color, name, size = 40 }) {
   );
 }
 
-// ── Chat thread (shared for group + direct) ──────────────────────────────────
+// ── New Direct Chat Modal ─────────────────────────────────────────────────────
+function NewChatModal({ onClose, onOpen }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); return; }
+    setLoading(true);
+    const t = setTimeout(() => {
+      API.get(`/api/users?q=${encodeURIComponent(query)}`)
+        .then(d => { setResults(d); setLoading(false); })
+        .catch(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  async function startChat(user) {
+    setCreating(true);
+    try {
+      const data = await API.post('/api/chat/direct', {
+        target_session: user.session_id,
+        target_nickname: user.nickname,
+      });
+      onOpen(data.room);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'var(--white)', borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 40, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>💬 שיחה חדשה</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--gray-400)' }}>✕</button>
+        </div>
+        <input
+          autoFocus
+          style={{
+            padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--gray-200)',
+            fontFamily: 'Heebo', fontSize: 13, direction: 'rtl', outline: 'none',
+            background: 'var(--gray-50)', marginBottom: 12,
+          }}
+          placeholder="חפש לפי כינוי..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--gray-400)', fontSize: 12 }}>מחפש...</div>
+        )}
+
+        {!loading && query.length >= 2 && results.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--gray-400)', fontSize: 12 }}>
+            לא נמצאו משתמשים עם הכינוי הזה
+          </div>
+        )}
+
+        {results.map(user => (
+          <button
+            key={user.id}
+            onClick={() => startChat(user)}
+            disabled={creating}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 4px', background: 'none', border: 'none', cursor: 'pointer',
+              borderBottom: '1px solid var(--gray-100)', width: '100%', direction: 'rtl', textAlign: 'right',
+              opacity: creating ? 0.5 : 1,
+            }}
+          >
+            <Avatar color={user.avatar_color} name={user.nickname} size={40} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{user.nickname}</div>
+              <div style={{ fontSize: 11, color: 'var(--gray-500)' }}>לחץ לפתיחת שיחה</div>
+            </div>
+          </button>
+        ))}
+
+        {query.length < 2 && (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--gray-400)', fontSize: 12, lineHeight: 1.7 }}>
+            הקלד לפחות 2 תווים כדי לחפש משתמשים<br />
+            שיחות ישירות נפתחות עם משתמשים רשומים
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── New Group Chat Modal ──────────────────────────────────────────────────────
+function NewGroupModal({ onClose, onOpen }) {
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  async function create() {
+    if (!name.trim()) return;
+    setCreating(true);
+    try {
+      const data = await API.post('/api/chat/group', { name: name.trim() });
+      onOpen(data.room);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'var(--white)', borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 40 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>⚡ קבוצה חדשה</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--gray-400)' }}>✕</button>
+        </div>
+        <input
+          autoFocus
+          style={{
+            padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--gray-200)',
+            fontFamily: 'Heebo', fontSize: 13, direction: 'rtl', outline: 'none',
+            background: 'var(--gray-50)', marginBottom: 16, width: '100%', boxSizing: 'border-box',
+          }}
+          placeholder="שם הקבוצה..."
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && create()}
+        />
+        <button
+          onClick={create}
+          disabled={!name.trim() || creating}
+          style={{
+            width: '100%', padding: 14, borderRadius: 12, border: 'none',
+            background: name.trim() ? 'var(--dark)' : 'var(--gray-200)',
+            color: name.trim() ? 'var(--yellow)' : 'var(--gray-400)',
+            fontFamily: 'Heebo', fontWeight: 700, fontSize: 14, cursor: name.trim() ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {creating ? '...' : '⚡ צור קבוצה'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Chat thread ───────────────────────────────────────────────────────────────
 function ChatThread({ room, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -32,7 +181,7 @@ function ChatThread({ room, onBack }) {
 
   useEffect(() => {
     fetchMessages();
-    const t = setInterval(fetchMessages, 3000); // poll every 3s
+    const t = setInterval(fetchMessages, 3000);
     return () => clearInterval(t);
   }, [fetchMessages]);
 
@@ -56,7 +205,6 @@ function ChatThread({ room, onBack }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
       <div style={{
         background: isGroup ? 'var(--yellow)' : 'var(--white)',
         padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
@@ -65,9 +213,8 @@ function ChatThread({ room, onBack }) {
         <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer' }}>‹</button>
         <div style={{
           width: 38, height: 38, borderRadius: 10,
-          background: isGroup ? 'rgba(0,0,0,0.12)' : 'var(--blue)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18,
+          background: isGroup ? 'rgba(0,0,0,0.12)' : '#3B82F6',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
         }}>
           {isGroup ? '⚡' : '💬'}
         </div>
@@ -79,7 +226,6 @@ function ChatThread({ room, onBack }) {
         </div>
       </div>
 
-      {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', background: 'var(--gray-100)' }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--gray-400)', fontSize: 12, paddingTop: 40 }}>
@@ -107,7 +253,7 @@ function ChatThread({ room, onBack }) {
                   fontSize: 13, lineHeight: 1.5, direction: 'rtl',
                   borderBottomRightRadius: isMe ? 4 : 16,
                   borderBottomLeftRadius: isMe ? 16 : 4,
-                  boxShadow: 'var(--shadow-sm)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
                 }}>
                   {msg.content}
                   <div style={{ fontSize: 10, color: 'var(--gray-400)', marginTop: 3, textAlign: isMe ? 'left' : 'right' }}>
@@ -121,7 +267,6 @@ function ChatThread({ room, onBack }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div style={{
         background: 'var(--white)', padding: '10px 14px', flexShrink: 0,
         display: 'flex', gap: 8, alignItems: 'center',
@@ -145,7 +290,8 @@ function ChatThread({ room, onBack }) {
           style={{
             width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
             background: input.trim() ? 'var(--dark)' : 'var(--gray-200)',
-            border: 'none', cursor: 'pointer', fontSize: 18, color: input.trim() ? 'var(--yellow)' : 'var(--gray-400)',
+            border: 'none', cursor: 'pointer', fontSize: 18,
+            color: input.trim() ? 'var(--yellow)' : 'var(--gray-400)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all 0.15s',
           }}
@@ -155,7 +301,7 @@ function ChatThread({ room, onBack }) {
   );
 }
 
-// ── Room list item ───────────────────────────────────────────────────────────
+// ── Room list item ─────────────────────────────────────────────────────────────
 function RoomItem({ room, onClick }) {
   const isGroup = room.type === 'group';
   return (
@@ -169,7 +315,7 @@ function RoomItem({ room, onClick }) {
     >
       <div style={{
         width: 46, height: 46, borderRadius: isGroup ? 12 : '50%', flexShrink: 0,
-        background: isGroup ? 'var(--yellow)' : 'var(--blue)',
+        background: isGroup ? 'var(--yellow)' : '#3B82F6',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
       }}>
         {isGroup ? '⚡' : '💬'}
@@ -191,23 +337,33 @@ function RoomItem({ room, onClick }) {
   );
 }
 
-// ── Main screen ──────────────────────────────────────────────────────────────
+// ── Main screen ────────────────────────────────────────────────────────────────
 export default function Friends({ requireLogin }) {
   const [rooms, setRooms] = useState({ group: [], direct: [] });
   const [activeRoom, setActiveRoom] = useState(null);
-  const [tab, setTab] = useState('group');
+  const [tab, setTab] = useState('direct');
   const [loading, setLoading] = useState(true);
+  const [showNewDirect, setShowNewDirect] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
 
-  useEffect(() => {
+  function loadRooms() {
     API.get('/api/chat/rooms')
       .then(data => { setRooms(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadRooms(); }, []);
+
+  function openRoom(room) {
+    setShowNewDirect(false);
+    setShowNewGroup(false);
+    setActiveRoom(room);
+  }
 
   if (activeRoom) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <ChatThread room={activeRoom} onBack={() => setActiveRoom(null)} />
+        <ChatThread room={activeRoom} onBack={() => { setActiveRoom(null); loadRooms(); }} />
       </div>
     );
   }
@@ -218,14 +374,34 @@ export default function Friends({ requireLogin }) {
     <div style={{ paddingBottom: 100 }}>
       {/* Header */}
       <div style={{ background: 'var(--white)', padding: '16px 12px 0', marginBottom: 10 }}>
-        <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 4 }}>צ׳אט</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <div style={{ fontSize: 20, fontWeight: 900 }}>צ׳אט</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => requireLogin ? requireLogin(() => setShowNewGroup(true)) : setShowNewGroup(true)}
+              style={{
+                padding: '6px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                background: 'var(--gray-100)', fontFamily: 'Heebo', fontWeight: 700, fontSize: 12,
+                color: 'var(--gray-700)',
+              }}
+            >⚡ קבוצה חדשה</button>
+            <button
+              onClick={() => requireLogin ? requireLogin(() => setShowNewDirect(true)) : setShowNewDirect(true)}
+              style={{
+                padding: '6px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                background: 'var(--dark)', fontFamily: 'Heebo', fontWeight: 700, fontSize: 12,
+                color: 'var(--yellow)',
+              }}
+            >💬 שיחה חדשה</button>
+          </div>
+        </div>
         <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 12 }}>
           שיחות קבוצתיות ופרטיות
         </div>
         <div style={{ display: 'flex', borderBottom: '1px solid var(--gray-200)' }}>
           {[
-            { key: 'group', label: '⚡ קבוצות לחץ' },
             { key: 'direct', label: '💬 ישיר' },
+            { key: 'group',  label: '⚡ קבוצות לחץ' },
           ].map(t => (
             <button
               key={t.key}
@@ -247,13 +423,33 @@ export default function Friends({ requireLogin }) {
         <div style={{ textAlign: 'center', padding: '48px 24px' }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>{tab === 'group' ? '⚡' : '💬'}</div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>
-            {tab === 'group' ? 'אין קבוצות פעילות' : 'אין שיחות פרטיות'}
+            {tab === 'group' ? 'אין קבוצות פעילות' : 'אין שיחות פרטיות עדיין'}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6, marginBottom: 20 }}>
             {tab === 'group'
               ? 'הצטרף לקבוצות לחץ כדי להשתתף בשיחות הקבוצתיות'
-              : 'שיחות פרטיות נפתחות מתוך פרופילי משתמשים'}
+              : 'התחל שיחה חדשה עם משתמש אחר'}
           </div>
+          {tab === 'direct' && (
+            <button
+              onClick={() => requireLogin ? requireLogin(() => setShowNewDirect(true)) : setShowNewDirect(true)}
+              style={{
+                padding: '12px 24px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: 'var(--dark)', color: 'var(--yellow)',
+                fontFamily: 'Heebo', fontWeight: 700, fontSize: 14,
+              }}
+            >💬 התחל שיחה</button>
+          )}
+          {tab === 'group' && (
+            <button
+              onClick={() => requireLogin ? requireLogin(() => setShowNewGroup(true)) : setShowNewGroup(true)}
+              style={{
+                padding: '12px 24px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: 'var(--yellow)', color: 'var(--dark)',
+                fontFamily: 'Heebo', fontWeight: 700, fontSize: 14,
+              }}
+            >⚡ צור קבוצה</button>
+          )}
         </div>
       ) : (
         <div style={{ background: 'var(--white)', borderRadius: 14, margin: '0 12px', overflow: 'hidden', border: '1.5px solid var(--gray-200)' }}>
@@ -271,6 +467,19 @@ export default function Friends({ requireLogin }) {
         }}>
           💡 הצטרף לקבוצות לחץ נוספות כדי לראות עוד שיחות קבוצתיות
         </div>
+      )}
+
+      {showNewDirect && (
+        <NewChatModal
+          onClose={() => setShowNewDirect(false)}
+          onOpen={openRoom}
+        />
+      )}
+      {showNewGroup && (
+        <NewGroupModal
+          onClose={() => setShowNewGroup(false)}
+          onOpen={openRoom}
+        />
       )}
     </div>
   );

@@ -32,6 +32,11 @@ export const API = {
     headers: { 'Content-Type': 'application/json', 'x-session': SESSION },
     body: JSON.stringify(body),
   }).then(r => r.json()),
+  put: (url, body) => fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-session': SESSION },
+    body: JSON.stringify(body),
+  }).then(r => r.json()),
 };
 
 export default function App() {
@@ -128,28 +133,33 @@ export default function App() {
     );
   }
 
-  if (screen === 'squad-lobby') {
+  if (screen === 'squad-lobby' || screen === 'company-lobby') {
+    const isCompany = screen === 'company-lobby';
     return (
       <div className="app-shell" style={{ overflowY: 'auto' }}>
-        <SquadLobby
-          squadId={squadLobbyId}
-          onBack={() => navigate('squads')}
-          onCreateShout={() => { setShowCreate(true); }}
-          requireLogin={requireLogin}
-        />
-      </div>
-    );
-  }
-
-  if (screen === 'company-lobby') {
-    return (
-      <div className="app-shell" style={{ overflowY: 'auto' }}>
-        <CompanyLobby
-          companyId={companyLobbyId}
-          onBack={() => navigate('companies')}
-          onCreateShout={() => { setShowCreate(true); }}
-          requireLogin={requireLogin}
-        />
+        {isCompany
+          ? <CompanyLobby
+              companyId={companyLobbyId}
+              onBack={() => { setShowLogin(false); navigate('companies'); }}
+              onCreateShout={() => requireLogin(() => setShowCreate(true))}
+              requireLogin={requireLogin}
+            />
+          : <SquadLobby
+              squadId={squadLobbyId}
+              onBack={() => { setShowLogin(false); navigate('squads'); }}
+              onCreateShout={() => requireLogin(() => setShowCreate(true))}
+              requireLogin={requireLogin}
+            />
+        }
+        {showCreate && (
+          <CreateShout onClose={() => setShowCreate(false)} onCreated={onShoutCreated} />
+        )}
+        {showLogin && (
+          <LoginModal
+            onClose={() => setShowLogin(false)}
+            onLoggedIn={(user) => { setShowLogin(false); localStorage.setItem('shout_onboarded', '1'); }}
+          />
+        )}
       </div>
     );
   }

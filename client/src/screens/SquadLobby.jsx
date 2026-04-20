@@ -3,31 +3,124 @@ import { API } from '../App.jsx';
 
 const SESSION = localStorage.getItem('shout_session') || '';
 
-function WebinarBtn({ squadId }) {
+function WebinarSection({ squad, isAdmin, onLinkSaved }) {
   const [registered, setRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkInput, setLinkInput] = useState(squad.webinar_link || '');
+  const [saving, setSaving] = useState(false);
 
   async function register() {
     setLoading(true);
     const nickname = localStorage.getItem('shout_nickname') || '';
-    await API.post('/api/webinars/register', { squad_id: squadId, nickname });
+    await API.post('/api/webinars/register', { squad_id: squad.id, nickname });
     setRegistered(true);
     setLoading(false);
   }
 
+  async function saveLink() {
+    setSaving(true);
+    await API.put(`/api/squads/${squad.id}/webinar-link`, { webinar_link: linkInput });
+    setSaving(false);
+    setEditingLink(false);
+    onLinkSaved(linkInput);
+  }
+
+  const hasLink = squad.webinar_link || linkInput;
+
   return (
-    <button
-      onClick={register}
-      disabled={registered || loading}
-      style={{
-        background: registered ? 'var(--green)' : 'var(--yellow)',
-        border: 'none', borderRadius: 10, padding: '8px 16px',
-        fontFamily: 'Heebo', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-        color: registered ? '#fff' : 'var(--dark)', opacity: loading ? 0.6 : 1,
-      }}
-    >
-      {registered ? '✅ נרשמת!' : loading ? '...' : 'הרשמה לוובינר ›'}
-    </button>
+    <div style={{
+      background: 'linear-gradient(135deg, #0D0D0D 0%, #1F2937 100%)',
+      borderRadius: 16, padding: 16, marginBottom: 10, color: '#fff',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--yellow)', marginBottom: 6 }}>
+        🎙️ וובינר קרוב
+      </div>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>
+        פגישת קבוצה: עדכון על המאבק
+      </div>
+      <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 12 }}>
+        יום שלישי 20:00 • עורך דין רועי כהן
+      </div>
+
+      {/* Video link */}
+      {editingLink ? (
+        <div style={{ marginBottom: 10 }}>
+          <input
+            autoFocus
+            value={linkInput}
+            onChange={e => setLinkInput(e.target.value)}
+            placeholder="https://zoom.us/j/... או https://meet.google.com/..."
+            style={{
+              width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none',
+              fontFamily: 'Heebo', fontSize: 12, boxSizing: 'border-box', marginBottom: 6,
+              direction: 'ltr',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={saveLink} disabled={saving} style={{
+              flex: 1, padding: '7px', borderRadius: 8, border: 'none',
+              background: 'var(--yellow)', fontFamily: 'Heebo', fontWeight: 700, fontSize: 12,
+              cursor: 'pointer', color: 'var(--dark)',
+            }}>
+              {saving ? '...' : '💾 שמור'}
+            </button>
+            <button onClick={() => setEditingLink(false)} style={{
+              padding: '7px 12px', borderRadius: 8, border: 'none',
+              background: 'rgba(255,255,255,0.1)', fontFamily: 'Heebo', fontSize: 12,
+              cursor: 'pointer', color: '#fff',
+            }}>ביטול</button>
+          </div>
+        </div>
+      ) : squad.webinar_link ? (
+        <div style={{ marginBottom: 10 }}>
+          <a
+            href={squad.webinar_link}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'block', padding: '8px 12px', borderRadius: 8,
+              background: 'rgba(255,255,255,0.1)', color: 'var(--yellow)',
+              textDecoration: 'none', fontSize: 12, fontWeight: 600,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}
+          >
+            📹 {squad.webinar_link}
+          </a>
+          {isAdmin && (
+            <button onClick={() => setEditingLink(true)} style={{
+              background: 'none', border: 'none', color: '#9CA3AF', fontSize: 11,
+              cursor: 'pointer', fontFamily: 'Heebo', marginTop: 4, padding: 0,
+            }}>✏️ עדכן קישור</button>
+          )}
+        </div>
+      ) : isAdmin ? (
+        <button onClick={() => setEditingLink(true)} style={{
+          width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed rgba(255,255,255,0.3)',
+          background: 'transparent', color: '#9CA3AF', fontFamily: 'Heebo', fontSize: 12,
+          cursor: 'pointer', marginBottom: 10,
+        }}>
+          + הוסף קישור לשיחת וידאו (Zoom / Google Meet)
+        </button>
+      ) : (
+        <div style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 10 }}>
+          קישור לשיחה יתווסף בקרוב
+        </div>
+      )}
+
+      <button
+        onClick={register}
+        disabled={registered || loading}
+        style={{
+          background: registered ? 'var(--green)' : 'var(--yellow)',
+          border: 'none', borderRadius: 10, padding: '8px 16px',
+          fontFamily: 'Heebo', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          color: registered ? '#fff' : 'var(--dark)', opacity: loading ? 0.6 : 1,
+        }}
+      >
+        {registered ? '✅ נרשמת!' : loading ? '...' : 'הרשמה לוובינר ›'}
+      </button>
+    </div>
   );
 }
 
@@ -69,6 +162,7 @@ export default function SquadLobby({ squadId, onBack, onCreateShout, requireLogi
   const [shouts, setShouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!squadId) return;
@@ -76,6 +170,7 @@ export default function SquadLobby({ squadId, onBack, onCreateShout, requireLogi
       .then(s => {
         setSquad(s);
         setJoined(s.joined || false);
+        setIsAdmin(s.is_admin || false);
         // load shouts for same company if exists
         const url = s.company_id ? `/api/shouts?company_id=${s.company_id}` : '/api/shouts';
         return API.get(url).then(sh => { setShouts(sh.slice(0, 6)); setLoading(false); });
@@ -195,21 +290,11 @@ export default function SquadLobby({ squadId, onBack, onCreateShout, requireLogi
         </div>
 
         {/* Webinar CTA */}
-        <div style={{
-          background: 'linear-gradient(135deg, #0D0D0D 0%, #1F2937 100%)',
-          borderRadius: 16, padding: 16, marginBottom: 10, color: '#fff',
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--yellow)', marginBottom: 6 }}>
-            🎙️ וובינר קרוב
-          </div>
-          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>
-            פגישת קבוצה: עדכון על המאבק
-          </div>
-          <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 12 }}>
-            יום שלישי 20:00 • עורך דין רועי כהן
-          </div>
-          <WebinarBtn squadId={squadId} />
-        </div>
+        <WebinarSection
+          squad={squad}
+          isAdmin={isAdmin}
+          onLinkSaved={link => setSquad(s => ({ ...s, webinar_link: link }))}
+        />
 
         {/* Join / Leave */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
